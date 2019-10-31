@@ -1,34 +1,34 @@
 [submodule "Loop"]
 	path = Loop
 	url = https://github.com/jeremybarnum/Loop.git
-    branch = CCN-dev
+    	branch = CCN-dev
 [submodule "LoopKit"]
 	path = LoopKit
 	url = https://github.com/jeremybarnum/LoopKit.git
-    branch = CCN-dev
+    	branch = CCN-dev
 [submodule "CGMBLEKit"]
 	path = CGMBLEKit
 	url = https://github.com/LoopKit/CGMBLEKit.git
-    branch = dev
+   	branch = dev
 [submodule "SwiftCharts"]
 	path = SwiftCharts
 	url = https://github.com/i-schuetz/SwiftCharts.git
 [submodule "dexcom-share-client-swift"]
 	path = dexcom-share-client-swift
 	url = https://github.com/LoopKit/dexcom-share-client-swift.git
-    branch = dev
+    	branch = dev
 [submodule "G4ShareSpy"]
 	path = G4ShareSpy
 	url = https://github.com/LoopKit/G4ShareSpy.git
-    branch = dev
+    	branch = dev
 [submodule "rileylink_ios"]
 	path = rileylink_ios
 	url = https://github.com/ps2/rileylink_ios.git
-    branch = dev
+    	branch = dev
 [submodule "Amplitude-iOS"]
 	path = Amplitude-iOS
 	url = https://github.com/LoopKit/Amplitude-iOS.git
-    branch = dev
+    	branch = dev
 [submodule "MKRingProgressView"]
 	path = MKRingProgressView
 	url = https://github.com/LoopKit/MKRingProgressView.git
