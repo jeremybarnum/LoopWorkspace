@@ -1,7 +1,7 @@
 [submodule "Loop"]
 	path = Loop
 	url = https://github.com/jeremybarnum/Loop.git
-    branch = CCN-NLC-IRC-mods-dev
+    branch = Nov3-Installed
 [submodule "LoopKit"]
 	path = LoopKit
 	url = https://github.com/jeremybarnum/LoopKit.git
