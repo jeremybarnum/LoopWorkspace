@@ -1,7 +1,7 @@
 [submodule "Loop"]
 	path = Loop
 	url = https://github.com/jeremybarnum/Loop.git
-    branch = Nov3-Installed
+    branch = nightscout-experiments
 [submodule "LoopKit"]
 	path = LoopKit
 	url = https://github.com/jeremybarnum/LoopKit.git
