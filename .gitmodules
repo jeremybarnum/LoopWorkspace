@@ -1,11 +1,11 @@
 [submodule "Loop"]
 	path = Loop
-	url = https://github.com/dm61/Loop.git
-	branch = insulin-model-delay
+	url = https://github.com/LoopKit/Loop.git
+	branch = automatic-bolus
 [submodule "LoopKit"]
 	path = LoopKit
-	url = https://github.com/dm61/LoopKit.git
-	branch = insulin-model-delay
+	url = https://github.com/LoopKit/LoopKit.git
+	branch = dev
 [submodule "CGMBLEKit"]
 	path = CGMBLEKit
 	url = https://github.com/LoopKit/CGMBLEKit.git
