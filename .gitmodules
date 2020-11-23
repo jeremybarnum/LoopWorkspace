@@ -1,7 +1,7 @@
 [submodule "Loop"]
 	path = Loop
 	url = https://github.com/jeremybarnum/Loop.git
-	branch = irc-pe-ab-sc-wip-jbmods
+	branch = basic-mods
 [submodule "LoopKit"]
 	path = LoopKit
 	url = https://github.com/LoopKit/LoopKit.git
