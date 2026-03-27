@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git submodule:*)",
+      "Bash(git branch:*)",
+      "Bash(git checkout:*)"
+    ]
+  }
+}
