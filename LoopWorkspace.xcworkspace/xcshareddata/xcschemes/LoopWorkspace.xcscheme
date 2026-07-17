@@ -56,6 +56,48 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "FADE00000000000000000042"
+               BuildableName = "RileyLinkBLEKit.framework"
+               BlueprintName = "RileyLinkBLEKit-watchOS"
+               ReferencedContainer = "container:RileyLinkKit/RileyLinkKit.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "FADE00000000000000000043"
+               BuildableName = "RileyLinkKit.framework"
+               BlueprintName = "RileyLinkKit-watchOS"
+               ReferencedContainer = "container:RileyLinkKit/RileyLinkKit.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "FADE00000000000000000102"
+               BuildableName = "OmnipodKit.framework"
+               BlueprintName = "OmnipodKit-watchOS"
+               ReferencedContainer = "container:OmnipodKit/OmnipodKit.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "43BA7153201E484D0058961E"
                BuildableName = "LoopKitUI.framework"
                BlueprintName = "LoopKitUI"
