@@ -1,9 +1,9 @@
 [submodule "Loop"]
 	path = Loop
-	url = https://github.com/LoopKit/Loop.git
+	url = https://github.com/jeremybarnum/Loop.git
 [submodule "LoopKit"]
 	path = LoopKit
-	url = https://github.com/LoopKit/LoopKit.git
+	url = https://github.com/jeremybarnum/LoopKit.git
 [submodule "CGMBLEKit"]
 	path = CGMBLEKit
 	url = https://github.com/LoopKit/CGMBLEKit.git
@@ -12,7 +12,7 @@
 	url = https://github.com/LoopKit/dexcom-share-client-swift.git
 [submodule "RileyLinkKit"]
 	path = RileyLinkKit
-	url = https://github.com/LoopKit/RileyLinkKit
+	url = https://github.com/jeremybarnum/rileylink_ios
 [submodule "NightscoutService"]
 	path = NightscoutService
 	url = https://github.com/LoopKit/NightscoutService.git
@@ -54,7 +54,7 @@
 	url = https://github.com/LoopKit/LibreTransmitter.git
 [submodule "OmnipodKit"]
 	path = OmnipodKit
-	url = https://github.com/loopandlearn/OmnipodKit
+	url = https://github.com/jeremybarnum/OmnipodKit
 [submodule "MedtrumKit"]
 	path = MedtrumKit
 	url = https://github.com/jbr7rr/MedtrumKit
