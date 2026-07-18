@@ -16,13 +16,15 @@
 #
 # Auth: App Store Connect API key (CI-grade; independent of the Xcode account
 # session, which proved fragile — "Failed to Use Accounts" after a re-sign-in).
+# The key must be ADMIN role: cloud-managed distribution signing (which the
+# app's store profiles use) is gated to Admin API keys (Apple forums 698117).
 # Key file: ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
 # Signing stays cloud/automatic via -allowProvisioningUpdates.
 # Outputs live OUTSIDE the repo in ../TestFlight-fromstock (archives pruned to 3).
 
 set -euo pipefail
 
-ASC_KEY_ID="AKNLXB3VFJ"
+ASC_KEY_ID="2NXQW3ZWCX"
 ASC_ISSUER_ID="69a6de91-92af-47e3-e053-5b8c7c11a4d1"
 ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
 [[ -f "$ASC_KEY_PATH" ]] || { echo "ASC API key missing: $ASC_KEY_PATH"; exit 64; }
