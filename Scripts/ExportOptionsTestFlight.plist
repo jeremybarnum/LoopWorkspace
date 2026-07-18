@@ -13,6 +13,11 @@
 	<string>upload</string>
 	<key>signingStyle</key>
 	<string>automatic</string>
+	<!-- Pin the LOCAL Apple Distribution identity: with API-key auth, automatic
+	     export otherwise tries Apple's cloud-managed certificate and dies with
+	     "Cloud signing permission error" (API keys lack that grant by default). -->
+	<key>signingCertificate</key>
+	<string>Apple Distribution</string>
 	<key>teamID</key>
 	<string>687ZSJ6WD3</string>
 	<key>uploadSymbols</key>
