@@ -8,5 +8,7 @@
 
 // Version [for DIY Loop]
 //   configure the version number in LoopWorkspace
+// Build numbers must exceed everything App Store Connect has seen for this bundle ID
+// (the prior com.SportMode lineage reached the 70s) — the 100s are the from-stock era.
 LOOP_MARKETING_VERSION = 3.14.3
-CURRENT_PROJECT_VERSION = 57
+CURRENT_PROJECT_VERSION = 100
