@@ -14,10 +14,18 @@
 # assigns the next available number at upload (same behavior as the Organizer).
 # Do not bump the source value.
 #
-# Signing: cloud signing via the Xcode-logged-in account (-allowProvisioningUpdates).
+# Auth: App Store Connect API key (CI-grade; independent of the Xcode account
+# session, which proved fragile — "Failed to Use Accounts" after a re-sign-in).
+# Key file: ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
+# Signing stays cloud/automatic via -allowProvisioningUpdates.
 # Outputs live OUTSIDE the repo in ../TestFlight-fromstock (archives pruned to 3).
 
 set -euo pipefail
+
+ASC_KEY_ID="AKNLXB3VFJ"
+ASC_ISSUER_ID="69a6de91-92af-47e3-e053-5b8c7c11a4d1"
+ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+[[ -f "$ASC_KEY_PATH" ]] || { echo "ASC API key missing: $ASC_KEY_PATH"; exit 64; }
 
 ROOT="${0:A:h:h}"                      # superproject root (this file is in Scripts/)
 BASE="${ROOT:h}"                       # the March2026 directory
@@ -53,6 +61,9 @@ caffeinate -is xcodebuild \
   -archivePath "$ARCHIVE" \
   -exportOptionsPlist "$ROOT/Scripts/ExportOptionsTestFlight.plist" \
   -exportPath "$EXPORT" \
+  -authenticationKeyPath "$ASC_KEY_PATH" \
+  -authenticationKeyID "$ASC_KEY_ID" \
+  -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
   -allowProvisioningUpdates >>"$LOG" 2>&1 || { note "UPLOAD FAILED — last lines:"; grep -B2 -A6 "error:" "$LOG" | tail -40 || tail -40 "$LOG"; exit 66; }
 note "UPLOAD ok — App Store Connect is processing; TestFlight notifies when installable."
 
