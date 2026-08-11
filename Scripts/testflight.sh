@@ -47,10 +47,7 @@ note() { print -- "$(date +%H:%M:%S) $1" | tee -a "$LOG" }
 # tests we neither own nor keep green, and a gate that is routinely red gets disabled.
 # ~6 s for 71 tests; skip only with SKIP_TESTS=1 for an emergency ship, which is logged.
 SIM_ID="BE1EB8F5-C98F-472D-B910-858C3F2F9632"   # iPhone sim; `xcrun simctl list devices` if it goes stale
-if [[ "${SKIP_TESTS:-0}" == "1" ]]; then
-  note "TEST GATE SKIPPED (SKIP_TESTS=1) — shipping unverified code by explicit request"
-else
-  note "TEST GATE starting (Sport Mode suites)"
+run_test_gate() {
   xcodebuild \
     -workspace "$ROOT/LoopWorkspace.xcworkspace" \
     -scheme LoopWorkspace \
@@ -63,28 +60,50 @@ else
     -only-testing:LoopTests/WatchStoreEffectsTests \
     -only-testing:LoopTests/PodLoanPhoneControllerTests \
     -only-testing:LoopTests/WatchDosingLimitsTests \
-    >>"$LOG" 2>&1 || {
-      # Every grep here is `|| true`: under `set -e` a non-matching grep exits 1 and would
-      # abort this block BEFORE `exit 67`, losing the diagnostic and the exit code
-      # (found by sabotage-testing this gate on 2026-08-11 — it printed nothing at all).
-      note "TEST GATE FAILED — NOT archiving."
-      assertions=""
-      assertions="$(grep -E "XCTAssert.* failed|: error:|failed - " "$LOG" | grep -v CoreData | tail -20 || true)"
-      if [[ -n "$assertions" ]]; then
+    >>"$LOG" 2>&1
+}
+
+# Assertion failures in the log, if any. Every grep is `|| true`: under `set -e` a
+# non-matching grep exits 1 and would abort the caller BEFORE `exit 67`, losing both the
+# diagnostic and the exit code (found by sabotage-testing this gate on 2026-08-11 — it
+# printed nothing at all). CoreData's "unable to open database file" chatter appears in
+# GREEN runs too (54-68 lines), so it is filtered out.
+gate_assertions() {
+  grep -E "XCTAssert.* failed|: error:|failed - " "$LOG" | grep -v CoreData | tail -20 || true
+}
+
+if [[ "${SKIP_TESTS:-0}" == "1" ]]; then
+  note "TEST GATE SKIPPED (SKIP_TESTS=1) — shipping unverified code by explicit request"
+else
+  note "TEST GATE starting (Sport Mode suites)"
+  if ! run_test_gate; then
+    if [[ -n "$(gate_assertions)" ]]; then
+      note "TEST GATE FAILED — NOT archiving. Assertion failures:"
+      print -- "$(gate_assertions)"
+      exit 67
+    fi
+    # No assertion lines at all = the run never got far enough to assert. The simulator
+    # runner hanging before connection is a KNOWN environment flake — four occurrences on
+    # 2026-08-11 (343/343/381/372 s, vs ~6 s green) with no code change between them.
+    # Retry ONCE. This cannot mask a real failure: we only get here when the log contains
+    # zero assertion failures, and a second run that produces any will exit below.
+    note "No assertion failures — looks like the simulator, not your code:"
+    grep -A3 "^Testing failed:" "$LOG" | tail -6 || true
+    note "Retrying once after shutting the simulators down..."
+    xcrun simctl shutdown all >/dev/null 2>&1 || true
+    if ! run_test_gate; then
+      note "TEST GATE FAILED on retry — NOT archiving."
+      if [[ -n "$(gate_assertions)" ]]; then
         note "Assertion failures:"
-        print -- "$assertions"
+        print -- "$(gate_assertions)"
       else
-        # No assertion lines = the run never got far enough to assert. The simulator
-        # runner hanging before connection is a KNOWN flake (seen 2026-08-11: 343 s then
-        # "The test runner hung before establishing connection", where the same suite
-        # passes in 6 s). Say so plainly, or a flake reads as a code failure and the
-        # gate gets switched off.
-        note "No assertion failures found — this looks like INFRASTRUCTURE, not your code:"
-        grep -A3 "^Testing failed:" "$LOG" | tail -8 || true
-        note "If it says the runner hung/failed to launch, just re-run the ship script."
+        note "Still no assertion failures — the test runner is not starting. Check Xcode/simulator state."
+        grep -A3 "^Testing failed:" "$LOG" | tail -6 || true
       fi
       exit 67
-    }
+    fi
+    note "TEST GATE ok on retry (first attempt was an environment flake)"
+  fi
   note "TEST GATE ok — $(grep -oE 'Executed [0-9]+ tests, with [0-9]+ failures' "$LOG" | tail -1 || true)"
 fi
 
