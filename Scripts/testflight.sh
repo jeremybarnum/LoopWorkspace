@@ -41,6 +41,53 @@ LOG="$OUT/pipeline-$STAMP.log"
 mkdir -p "$OUT"
 note() { print -- "$(date +%H:%M:%S) $1" | tee -a "$LOG" }
 
+# TEST GATE (coverage plan item 1). The ship script is the one choke point every build
+# passes through — we commit locally and never push, so GitHub CI would test stale code.
+# Deliberately scoped to the Sport-Mode suites: the full LoopTests target carries upstream
+# tests we neither own nor keep green, and a gate that is routinely red gets disabled.
+# ~6 s for 71 tests; skip only with SKIP_TESTS=1 for an emergency ship, which is logged.
+SIM_ID="BE1EB8F5-C98F-472D-B910-858C3F2F9632"   # iPhone sim; `xcrun simctl list devices` if it goes stale
+if [[ "${SKIP_TESTS:-0}" == "1" ]]; then
+  note "TEST GATE SKIPPED (SKIP_TESTS=1) — shipping unverified code by explicit request"
+else
+  note "TEST GATE starting (Sport Mode suites)"
+  xcodebuild \
+    -workspace "$ROOT/LoopWorkspace.xcworkspace" \
+    -scheme LoopWorkspace \
+    -destination "platform=iOS Simulator,id=$SIM_ID" \
+    -derivedDataPath "$BASE/.dd-sim" \
+    ONLY_ACTIVE_ARCH=YES \
+    test \
+    -only-testing:LoopTests/LoanProtocolV2Tests \
+    -only-testing:LoopTests/LoanBooksHarnessTests \
+    -only-testing:LoopTests/WatchStoreEffectsTests \
+    -only-testing:LoopTests/PodLoanPhoneControllerTests \
+    -only-testing:LoopTests/WatchDosingLimitsTests \
+    >>"$LOG" 2>&1 || {
+      # Every grep here is `|| true`: under `set -e` a non-matching grep exits 1 and would
+      # abort this block BEFORE `exit 67`, losing the diagnostic and the exit code
+      # (found by sabotage-testing this gate on 2026-08-11 — it printed nothing at all).
+      note "TEST GATE FAILED — NOT archiving."
+      assertions=""
+      assertions="$(grep -E "XCTAssert.* failed|: error:|failed - " "$LOG" | grep -v CoreData | tail -20 || true)"
+      if [[ -n "$assertions" ]]; then
+        note "Assertion failures:"
+        print -- "$assertions"
+      else
+        # No assertion lines = the run never got far enough to assert. The simulator
+        # runner hanging before connection is a KNOWN flake (seen 2026-08-11: 343 s then
+        # "The test runner hung before establishing connection", where the same suite
+        # passes in 6 s). Say so plainly, or a flake reads as a code failure and the
+        # gate gets switched off.
+        note "No assertion failures found — this looks like INFRASTRUCTURE, not your code:"
+        grep -A3 "^Testing failed:" "$LOG" | tail -8 || true
+        note "If it says the runner hung/failed to launch, just re-run the ship script."
+      fi
+      exit 67
+    }
+  note "TEST GATE ok — $(grep -oE 'Executed [0-9]+ tests, with [0-9]+ failures' "$LOG" | tail -1 || true)"
+fi
+
 note "ARCHIVE starting (LoopWorkspace scheme, Release) — the long step; log: $LOG"
 caffeinate -is xcodebuild \
   -workspace "$ROOT/LoopWorkspace.xcworkspace" \
