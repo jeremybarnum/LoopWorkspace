@@ -57,6 +57,7 @@ run_test_gate() {
     test \
     -only-testing:LoopTests/LoanProtocolV2Tests \
     -only-testing:LoopTests/LoanBooksHarnessTests \
+    -only-testing:LoopTests/LoanEventJournalTests \
     -only-testing:LoopTests/WatchStoreEffectsTests \
     -only-testing:LoopTests/PodLoanPhoneControllerTests \
     -only-testing:LoopTests/WatchDosingLimitsTests \
