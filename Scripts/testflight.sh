@@ -61,6 +61,7 @@ run_test_gate() {
     -only-testing:LoopTests/WatchStoreEffectsTests \
     -only-testing:LoopTests/PodLoanPhoneControllerTests \
     -only-testing:LoopTests/WatchDosingLimitsTests \
+    -only-testing:LoopTests/WatchOverrideDosingTests \
     >>"$LOG" 2>&1
 }
 
