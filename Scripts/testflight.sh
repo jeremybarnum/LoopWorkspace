@@ -45,7 +45,7 @@ note() { print -- "$(date +%H:%M:%S) $1" | tee -a "$LOG" }
 # passes through — we commit locally and never push, so GitHub CI would test stale code.
 # Deliberately scoped to the Sport-Mode suites: the full LoopTests target carries upstream
 # tests we neither own nor keep green, and a gate that is routinely red gets disabled.
-# ~6 s for 71 tests; skip only with SKIP_TESTS=1 for an emergency ship, which is logged.
+# ~7 s for 111 tests; skip only with SKIP_TESTS=1 for an emergency ship, which is logged.
 SIM_ID="BE1EB8F5-C98F-472D-B910-858C3F2F9632"   # iPhone sim; `xcrun simctl list devices` if it goes stale
 run_test_gate() {
   xcodebuild \
@@ -62,6 +62,7 @@ run_test_gate() {
     -only-testing:LoopTests/PodLoanPhoneControllerTests \
     -only-testing:LoopTests/WatchDosingLimitsTests \
     -only-testing:LoopTests/WatchOverrideDosingTests \
+    -only-testing:LoopTests/LoanTwoSidedContractTests \
     >>"$LOG" 2>&1
 }
 
