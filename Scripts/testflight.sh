@@ -6,8 +6,22 @@
 # After this succeeds, App Store Connect processes the build (~5-15 min) and
 # TestFlight notifies the phone; installing from TestFlight stays manual.
 #
-#   Usage:  Scripts/testflight.sh                 # archive + upload
-#           Scripts/testflight.sh --archive-only  # stop before the upload
+#   Usage:  Scripts/testflight.sh                      # gate + archive + upload
+#           Scripts/testflight.sh --archive-only       # gate + archive, stop before upload
+#           Scripts/testflight.sh --upload-only        # upload the NEWEST existing archive
+#           Scripts/testflight.sh --upload-only <path> # upload a specific archive
+#           ... --upload-only --force                  # upload even if the archive is stale
+#
+# --upload-only exists because the archive is the expensive step (~3.5 min) and the upload is
+# the fragile one: on 2026-08-12 App Store Connect returned "The Internet connection appears to
+# be offline" three seconds into auth, on a machine that was demonstrably online. Re-running the
+# whole script to retry a 30-second upload wastes the archive that already passed the gate.
+#
+# It does NOT weaken the gate. Any archive this script produced passed the gate when it was
+# created, and an archive is immutable bits — re-uploading it ships exactly what was tested.
+# The real hazard is different: editing code and then running --upload-only, shipping the OLD
+# bits while believing the fix went out. So this mode compares the archive against the repo and
+# REFUSES if commits landed after it was built, listing them. --force overrides, loudly.
 #
 # Build numbers: CURRENT_PROJECT_VERSION in VersionOverride.xcconfig is a base;
 # the export options enable manageAppVersionAndBuildNumber, so App Store Connect
@@ -40,6 +54,82 @@ LOG="$OUT/pipeline-$STAMP.log"
 
 mkdir -p "$OUT"
 note() { print -- "$(date +%H:%M:%S) $1" | tee -a "$LOG" }
+
+MODE="full"           # full | archive-only | upload-only
+FORCE=0
+UPLOAD_ARCHIVE=""
+while (( $# )); do
+  case "$1" in
+    --archive-only) MODE="archive-only" ;;
+    --upload-only)  MODE="upload-only" ;;
+    --force)        FORCE=1 ;;
+    -*)             echo "unknown flag: $1"; exit 64 ;;
+    *)              UPLOAD_ARCHIVE="$1" ;;
+  esac
+  shift
+done
+
+do_upload() {
+  local archive="$1"
+  note "UPLOAD starting (destination=upload; ASC assigns the next build number)"
+  note "  archive: ${archive:t}"
+  caffeinate -is xcodebuild \
+  -exportArchive \
+  -archivePath "$archive" \
+  -exportOptionsPlist "$ROOT/Scripts/ExportOptionsTestFlight.plist" \
+  -exportPath "$EXPORT" \
+  -authenticationKeyPath "$ASC_KEY_PATH" \
+  -authenticationKeyID "$ASC_KEY_ID" \
+  -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+  -allowProvisioningUpdates >>"$LOG" 2>&1 || { note "UPLOAD FAILED — last lines:"; grep -B2 -A6 "error:" "$LOG" | tail -40 || tail -40 "$LOG"; exit 66; }
+  note "UPLOAD ok — App Store Connect is processing; TestFlight notifies when installable."
+}
+
+# --upload-only: no gate, no archive. Resolve the archive, prove it is not stale, upload.
+if [[ "$MODE" == "upload-only" ]]; then
+  if [[ -z "$UPLOAD_ARCHIVE" ]]; then
+    # (N) is the null_glob qualifier and is load-bearing: under zsh + `set -e` an UNMATCHED
+    # glob is a fatal error, so the bare `ls -dt "$OUT"/Loop-*.xcarchive` this replaced aborted
+    # the script before it could reach the friendly message below. Found by running the flag
+    # against an empty directory, which is exactly the state a new machine starts in.
+    typeset -a archives
+    archives=("$OUT"/Loop-*.xcarchive(N))
+    (( ${#archives} )) || { note "--upload-only: no archive in $OUT — run without the flag first."; exit 64; }
+    UPLOAD_ARCHIVE=$(ls -dt "${archives[@]}" | head -1)   # ls -dt for its known newest-first order
+    note "--upload-only: using the newest archive"
+  fi
+  [[ -d "$UPLOAD_ARCHIVE" ]] || { note "--upload-only: not an archive: $UPLOAD_ARCHIVE"; exit 64; }
+
+  # STALENESS GUARD. The archive passed the gate when it was built, so re-uploading it ships
+  # exactly what was tested. The hazard this catches is the other one: code changed since, and
+  # you are about to ship the OLD bits believing the new ones went out. Checks BOTH levels —
+  # the superproject and the Loop submodule, where the Swift actually lives.
+  archive_epoch=$(stat -f %m "$UPLOAD_ARCHIVE")
+  newer=""
+  for repo in "$ROOT" "$ROOT/Loop"; do
+    [[ -d "$repo/.git" || -f "$repo/.git" ]] || continue
+    n=$(git -C "$repo" log --oneline --since="@$archive_epoch" 2>/dev/null | wc -l | tr -d ' ')
+    if [[ "$n" != "0" ]]; then
+      newer="$newer  ${repo:t}: $n commit(s) after this archive was built"$'\n'
+      newer="$newer$(git -C "$repo" log --oneline --since="@$archive_epoch" 2>/dev/null | sed 's/^/      /')"$'\n'
+    fi
+  done
+  if [[ -n "$newer" ]]; then
+    note "** STALE ARCHIVE — built $(date -r "$archive_epoch" '+%Y-%m-%d %H:%M:%S'), and code has changed since:"
+    print -- "$newer"
+    if (( ! FORCE )); then
+      note "REFUSING: uploading this would ship the OLD bits. Re-run without --upload-only to"
+      note "rebuild, or add --force if you genuinely want this exact archive."
+      exit 68
+    fi
+    note "--force given: uploading the stale archive anyway."
+  else
+    note "archive is current — no commits since it was built"
+  fi
+  do_upload "$UPLOAD_ARCHIVE"
+  exit 0
+fi
+
 
 # TEST GATE (coverage plan item 1). The ship script is the one choke point every build
 # passes through — we commit locally and never push, so GitHub CI would test stale code.
@@ -179,25 +269,19 @@ caffeinate -is xcodebuild \
   archive >>"$LOG" 2>&1 || { note "ARCHIVE FAILED — last lines:"; grep -B2 -A6 "error:" "$LOG" | tail -40 || tail -40 "$LOG"; exit 65; }
 note "ARCHIVE ok: $ARCHIVE"
 
-if [[ "${1:-}" == "--archive-only" ]]; then
-  note "Stopping before upload (--archive-only)."
+if [[ "$MODE" == "archive-only" ]]; then
+  note "Stopping before upload (--archive-only). Upload later with:"
+  note "  Scripts/testflight.sh --upload-only '$ARCHIVE'"
   exit 0
 fi
 
-note "UPLOAD starting (destination=upload; ASC assigns the next build number)"
-caffeinate -is xcodebuild \
-  -exportArchive \
-  -archivePath "$ARCHIVE" \
-  -exportOptionsPlist "$ROOT/Scripts/ExportOptionsTestFlight.plist" \
-  -exportPath "$EXPORT" \
-  -authenticationKeyPath "$ASC_KEY_PATH" \
-  -authenticationKeyID "$ASC_KEY_ID" \
-  -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-  -allowProvisioningUpdates >>"$LOG" 2>&1 || { note "UPLOAD FAILED — last lines:"; grep -B2 -A6 "error:" "$LOG" | tail -40 || tail -40 "$LOG"; exit 66; }
-note "UPLOAD ok — App Store Connect is processing; TestFlight notifies when installable."
+do_upload "$ARCHIVE"
 
 # Keep the three newest archives; old ones are gigabytes each.
-ls -dt "$OUT"/Loop-*.xcarchive 2>/dev/null | tail -n +4 | while read -r old; do
-  note "pruning old archive: ${old:t}"
-  rm -rf "$old"
-done
+prune=("$OUT"/Loop-*.xcarchive(N))     # (N): see the --upload-only note — an unmatched
+if (( ${#prune} > 3 )); then           # glob is fatal under `set -e`, and this runs LAST,
+  ls -dt "${prune[@]}" | tail -n +4 | while read -r old; do   # i.e. after a successful upload
+    note "pruning old archive: ${old:t}"
+    rm -rf "$old"
+  done
+fi
