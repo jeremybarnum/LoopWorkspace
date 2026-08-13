@@ -15,7 +15,7 @@
 	url = https://github.com/jeremybarnum/rileylink_ios
 [submodule "NightscoutService"]
 	path = NightscoutService
-	url = https://github.com/LoopKit/NightscoutService.git
+	url = https://github.com/jeremybarnum/NightscoutService.git
 [submodule "Minizip"]
 	path = Minizip
 	url = https://github.com/LoopKit/Minizip.git
@@ -24,7 +24,7 @@
 	url = https://github.com/LoopKit/TrueTime.swift.git
 [submodule "LoopOnboarding"]
 	path = LoopOnboarding
-	url = https://github.com/LoopKit/LoopOnboarding.git
+	url = https://github.com/jeremybarnum/LoopOnboarding.git
 [submodule "AmplitudeService"]
 	path = AmplitudeService
 	url = https://github.com/LoopKit/AmplitudeService.git
