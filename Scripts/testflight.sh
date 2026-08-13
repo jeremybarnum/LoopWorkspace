@@ -166,6 +166,38 @@ run_test_gate() {
   return $rc
 }
 
+# WATCH GATE. Held out of the gate until there was something worth gating on: the watch suites
+# were reachability checks until 2026-08-13, and a gate that only proves a target links is cost
+# without protection. They are now behavioral and sabotage-verified — timer arming and epoch
+# scoping through the scheduling seam, the #113 wedge truth table, and the three dead-man alerts'
+# arming and replacement — so a break in them is a real break.
+#
+# It needs its own xcodebuild run because it is a different platform, and it costs ~90 s.
+#
+# Use the WatchAppTests scheme, never WatchApp: that scheme sets buildImplicitDependencies=NO,
+# which is correct for the device-install path it was written for and fails against a SIMULATOR
+# (LoopCore compiles before LoopKit exists). Do not "fix" that by flipping the flag.
+WATCH_SIM_ID="486D8F78-FE73-4630-A1C6-A9D4645F99A3"   # Apple Watch Series 11 (46mm), watchOS 26.5
+WATCH_RUNLOG="$OUT/.gate-watch.log"
+run_watch_gate() {
+  : > "$WATCH_RUNLOG"
+  local rc=0
+  xcodebuild \
+    -workspace "$ROOT/LoopWorkspace.xcworkspace" \
+    -scheme WatchAppTests \
+    -destination "platform=watchOS Simulator,id=$WATCH_SIM_ID" \
+    -derivedDataPath "$BASE/.dd-watchtests" \
+    ONLY_ACTIVE_ARCH=YES \
+    test \
+    >>"$WATCH_RUNLOG" 2>&1 || rc=$?
+  cat "$WATCH_RUNLOG" >> "$LOG"
+  return $rc
+}
+
+watch_gate_assertions() {
+  grep -E "^.*: error: -\[.*\] :" "$WATCH_RUNLOG" 2>/dev/null || true
+}
+
 # Assertion failures in the log, if any. Every grep is `|| true`: under `set -e` a
 # non-matching grep exits 1 and would abort the caller BEFORE `exit 67`, losing both the
 # diagnostic and the exit code (found by sabotage-testing this gate on 2026-08-11 — it
@@ -256,6 +288,29 @@ else
     fi
   fi
   note "TEST GATE ok — $(grep -oE 'Executed [0-9]+ tests, with [0-9]+ failures' "$LOG" | tail -1 || true)"
+
+  note "WATCH GATE starting (watchOS simulator — the extension's own code)"
+  if ! run_watch_gate; then
+    # Same environment flake applies here: a runner that never connects produces no assertion
+    # lines at all. Retry once, and only when there is nothing to assert on — a real failure
+    # prints assertions and exits immediately.
+    if [[ -n "$(watch_gate_assertions)" ]]; then
+      note "WATCH GATE FAILED — NOT archiving. Assertion failures:"
+      print -- "$(watch_gate_assertions)"
+      exit 68
+    fi
+    note "No assertion failures — looks like the simulator, not your code. Retrying once..."
+    grep -A3 "^Testing failed:" "$WATCH_RUNLOG" | tail -6 || true
+    xcrun simctl shutdown all >/dev/null 2>&1 || true
+    if ! run_watch_gate; then
+      note "WATCH GATE FAILED on retry — NOT archiving."
+      print -- "$(watch_gate_assertions)"
+      grep -A3 "^Testing failed:" "$WATCH_RUNLOG" | tail -6 || true
+      exit 68
+    fi
+    note "WATCH GATE ok on retry (first attempt was an environment flake)"
+  fi
+  note "WATCH GATE ok — $(grep -oE 'Executed [0-9]+ tests, with [0-9]+ failures' "$WATCH_RUNLOG" | tail -1 || true)"
 fi
 
 note "ARCHIVE starting (LoopWorkspace scheme, Release) — the long step; log: $LOG"
