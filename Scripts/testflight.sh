@@ -161,6 +161,7 @@ run_test_gate() {
     -only-testing:LoopTests/WatchDosingLimitsTests \
     -only-testing:LoopTests/WatchOverrideDosingTests \
     -only-testing:LoopTests/LoanTwoSidedContractTests \
+    -only-testing:LoopTests/ICEInvalidationTests \
     >>"$RUNLOG" 2>&1 || rc=$?
   cat "$RUNLOG" >> "$LOG"
   return $rc
