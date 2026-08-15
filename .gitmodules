@@ -1,9 +1,11 @@
 [submodule "Loop"]
 	path = Loop
 	url = https://github.com/jeremybarnum/Loop.git
+	branch = SportMode
 [submodule "LoopKit"]
 	path = LoopKit
 	url = https://github.com/jeremybarnum/LoopKit.git
+	branch = SportMode
 [submodule "CGMBLEKit"]
 	path = CGMBLEKit
 	url = https://github.com/LoopKit/CGMBLEKit.git
@@ -13,6 +15,7 @@
 [submodule "RileyLinkKit"]
 	path = RileyLinkKit
 	url = https://github.com/jeremybarnum/rileylink_ios
+	branch = SportMode
 [submodule "NightscoutService"]
 	path = NightscoutService
 	url = https://github.com/LoopKit/NightscoutService.git
@@ -40,6 +43,7 @@
 [submodule "G7SensorKit"]
 	path = G7SensorKit
 	url = https://github.com/jeremybarnum/G7SensorKit.git
+	branch = SportMode
 [submodule "TidepoolService"]
 	path = TidepoolService
 	url = https://github.com/LoopKit/TidepoolService.git
@@ -55,6 +59,7 @@
 [submodule "OmnipodKit"]
 	path = OmnipodKit
 	url = https://github.com/jeremybarnum/OmnipodKit
+	branch = SportMode
 [submodule "MedtrumKit"]
 	path = MedtrumKit
 	url = https://github.com/jbr7rr/MedtrumKit
