@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- TestFlight export for the from-stock Sport Mode build (Scripts/testflight.sh).
+	     destination=upload sends straight to App Store Connect;
+	     manageAppVersionAndBuildNumber=true is the same Organizer checkbox that has
+	     been auto-assigning the next available build number (106->107->108) — the
+	     source CURRENT_PROJECT_VERSION stays untouched. -->
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>destination</key>
+	<string>upload</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>teamID</key>
+	<string>687ZSJ6WD3</string>
+	<key>uploadSymbols</key>
+	<true/>
+	<key>manageAppVersionAndBuildNumber</key>
+	<true/>
+</dict>
+</plist>
