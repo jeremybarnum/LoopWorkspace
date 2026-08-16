@@ -228,12 +228,34 @@ failing_tests() {
 # Any failure outside this list exits immediately with no retry.
 KNOWN_103_FLAKES=(testDuplicateBolusTwinDetection testHandbackSeamCloses testLedgerMatchesDoseStoreIOB)
 
-only_known_103_flakes() {
+# A SECOND, unrelated flake family, observed 2026-08-15 (#125). These tests accrue insulin
+# across 5-minute grid steps and assert a DELTA, so they are sensitive to where wall-clock
+# "now" falls in the grid and to elapsed real time under CPU load. Observed signature: the
+# delta comes back as exactly 0.0, or as a fraction of one grid step (0.0041 U against a
+# required 0.0283 U) — i.e. no step, or a partial step, was crossed during the window.
+#
+# The evidence they are flakes and not regressions, from that day: the failures appeared on
+# source that could not reach them (the only edits were watch-extension-only files, verified
+# by pbxproj target membership), five failed on one run and a DIFFERENT one on the next, and
+# three subsequent runs were clean. Failures that MOVE between runs are flakes; a regression
+# fails the same test every time.
+#
+# The same three conditions as above make the retry safe: restricted to this list, must come
+# back FULLY green, and tallied so a rising rate is visible. The proper fix is to pin these
+# tests to an injected clock the way the watch suites were pinned — see task #125. This list
+# is containment so a random red does not train anyone to ignore the gate; it is not the fix,
+# and if the tally climbs, do the fix instead of widening the list.
+KNOWN_125_FLAKES=(testLedgerLiveTempTracksDelivery testPodOwnedMutableTempTracksDeliveryInIOB
+                  testLegacyOfferWithoutReleasedKeyFinalizesTheLoan testInheritedTempSpanBooksOnBothSides)
+
+# True when EVERY failing test is in one of the known-flake lists. Mixed failures — one known
+# flake plus one real break — deliberately return false: the real break must stop the ship.
+only_known_flakes() {
   local t found=0
   while read -r t; do
     [[ -z "$t" ]] && continue
     found=1
-    [[ " ${KNOWN_103_FLAKES[*]} " == *" $t "* ]] || return 1
+    [[ " ${KNOWN_103_FLAKES[*]} ${KNOWN_125_FLAKES[*]} " == *" $t "* ]] || return 1
   done <<< "$(failing_tests)"
   (( found == 1 ))
 }
@@ -244,21 +266,22 @@ else
   note "TEST GATE starting (Sport Mode suites)"
   if ! run_test_gate; then
     if [[ -n "$(gate_assertions)" ]]; then
-      if only_known_103_flakes; then
-        note "TEST GATE: only known #103 flakes failed: $(failing_tests | tr '\n' ' ')"
+      if only_known_flakes; then
+        note "TEST GATE: only known flakes failed: $(failing_tests | tr '\n' ' ')"
         note "  #103 = the temp Core Data store intermittently answers with zero rows."
+        note "  #125 = grid-step timing: a delta assertion crosses no 5-min step under load."
         note "  Retrying ONCE, and the retry must be FULLY green. A deterministic regression"
         note "  in these tests cannot pass a retry; only an intermittent one could hide here."
         print -- "$(date '+%Y-%m-%d %H:%M:%S') $(failing_tests | tr '\n' ' ')" >> "$OUT/flake-tally.log"
-        note "  #103 occurrences recorded to date: $(wc -l < "$OUT/flake-tally.log" | tr -d ' ') (tally: $OUT/flake-tally.log)"
-        note "  If this rate climbs, STOP retrying and find the mechanism."
+        note "  flake occurrences recorded to date: $(wc -l < "$OUT/flake-tally.log" | tr -d ' ') (tally: $OUT/flake-tally.log)"
+        note "  If this rate climbs, STOP retrying and fix the mechanism (#103 / #125)."
         xcrun simctl shutdown all >/dev/null 2>&1 || true
         if ! run_test_gate; then
           note "TEST GATE FAILED ON RETRY — NOT archiving. This is NOT the flake:"
           print -- "$(gate_assertions)"
           exit 67
         fi
-        note "TEST GATE ok on retry — first attempt was the #103 flake"
+        note "TEST GATE ok on retry — first attempt was a known flake"
       else
         note "TEST GATE FAILED — NOT archiving. Assertion failures:"
         print -- "$(gate_assertions)"

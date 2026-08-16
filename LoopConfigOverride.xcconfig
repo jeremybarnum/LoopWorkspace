@@ -1,7 +1,7 @@
 #include? "../../LoopConfigOverride.xcconfig"
 
 // Override this if you don't want the default com.${DEVELOPMENT_TEAM}.loopkit that loop uses
-MAIN_APP_BUNDLE_IDENTIFIER = com.StockSportMode
+// MAIN_APP_BUNDLE_IDENTIFIER = com.myname.loop
 
 // Customize this to change the app name displayed
 //MAIN_APP_DISPLAY_NAME = Loop
@@ -10,10 +10,7 @@ MAIN_APP_BUNDLE_IDENTIFIER = com.StockSportMode
 //URL_SCHEME_NAME = $(MAIN_APP_DISPLAY_NAME)
 
 // Features
-// FAKE_NEW_SENSOR: the new-sensor TEST hooks (Component E) — the ladybug toolbar button
-// fabricates a .sensorStart so the prompt→store→relay→watch-prewarm flow is testable
-// without a real sensor. STRIP BEFORE PRODUCTION (pre-production checklist).
-SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) EXPERIMENTAL_FEATURES_ENABLED SIMULATORS_ENABLED ALLOW_ALGORITHM_EXPERIMENTS DEBUG_FEATURES_ENABLED FAKE_NEW_SENSOR
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) EXPERIMENTAL_FEATURES_ENABLED SIMULATORS_ENABLED ALLOW_ALGORITHM_EXPERIMENTS DEBUG_FEATURES_ENABLED
 
 // Put your team id here for signing
-LOOP_DEVELOPMENT_TEAM = 687ZSJ6WD3
+//LOOP_DEVELOPMENT_TEAM = UY678SP37Q
