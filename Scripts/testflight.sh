@@ -6,11 +6,22 @@
 # After this succeeds, App Store Connect processes the build (~5-15 min) and
 # TestFlight notifies the phone; installing from TestFlight stays manual.
 #
-#   Usage:  Scripts/testflight.sh                      # gate + archive + upload
-#           Scripts/testflight.sh --archive-only       # gate + archive, stop before upload
-#           Scripts/testflight.sh --upload-only        # upload the NEWEST existing archive
-#           Scripts/testflight.sh --upload-only <path> # upload a specific archive
-#           ... --upload-only --force                  # upload even if the archive is stale
+#   Usage:  Scripts/testflight.sh --for <person>                 # gate + archive + upload
+#           Scripts/testflight.sh --for <person> --archive-only  # stop before upload
+#           Scripts/testflight.sh --for <person> --upload-only   # upload the NEWEST archive
+#           Scripts/testflight.sh --for <person> --upload-only <path>
+#           ... --upload-only --force                            # upload a stale archive
+#
+# --for is REQUIRED and names a PERSON (jeremy, caitlin), never a bundle string. Identity is
+# one uncommitted line in LoopConfigOverride.xcconfig that silently follows whoever was built
+# for last, in whichever checkout — the build log does not say, and the on-wrist tag cannot
+# (CFBundleVersion is pinned). A wrong identity installs a SECOND app rather than an upgrade,
+# leaving the running pod bound to the old app; deleting that app to tidy up strands the pod.
+#
+# So this door ASSERTS twice and restores nothing. Once against the tree before building, and
+# again against the finished archive's Info.plist before uploading — an archive is immutable
+# bits that may have been built hours ago under the other identity, so the xcconfig alone is
+# not evidence about what is being shipped. See ops/identity.sh.
 #
 # --upload-only exists because the archive is the expensive step (~3.5 min) and the upload is
 # the fragile one: on 2026-08-12 App Store Connect returned "The Internet connection appears to
@@ -58,19 +69,38 @@ note() { print -- "$(date +%H:%M:%S) $1" | tee -a "$LOG" }
 MODE="full"           # full | archive-only | upload-only
 FORCE=0
 UPLOAD_ARCHIVE=""
+FOR_PERSON=""
+IDENTITY="${BASE:h}/ops/identity.sh"   # outside every checkout, beside install-pair.sh
 while (( $# )); do
   case "$1" in
     --archive-only) MODE="archive-only" ;;
     --upload-only)  MODE="upload-only" ;;
     --force)        FORCE=1 ;;
+    --for)          shift; FOR_PERSON="${1:-}" ;;
     -*)             echo "unknown flag: $1"; exit 64 ;;
     *)              UPLOAD_ARCHIVE="$1" ;;
   esac
   shift
 done
 
+# Required, and deliberately with no default. A default is a guess about whose device is on
+# the other end of this, and the whole point is that nothing here guesses.
+[[ -n "$FOR_PERSON" ]] || {
+  echo "testflight.sh: --for is required. Who is this build for? (jeremy, caitlin)"
+  echo "  e.g. Scripts/testflight.sh --for caitlin --archive-only"
+  exit 64
+}
+[[ -x "$IDENTITY" ]] || { echo "testflight.sh: cannot find ops/identity.sh at $IDENTITY"; exit 64; }
+"$IDENTITY" assert "$FOR_PERSON" --tree "$ROOT" || exit $?
+note "identity: building for $FOR_PERSON ($("$IDENTITY" bundle-id "$FOR_PERSON"))"
+
 do_upload() {
   local archive="$1"
+  # The last gate before bits leave this Mac. Deliberately re-derived from the ARCHIVE
+  # rather than from the config: the archive is what ships, and it can predate the current
+  # xcconfig by any amount — including a --upload-only of something built for the other
+  # person yesterday.
+  "$IDENTITY" assert-archive "$FOR_PERSON" "$archive" || exit $?
   note "UPLOAD starting (destination=upload; ASC assigns the next build number)"
   note "  archive: ${archive:t}"
   caffeinate -is xcodebuild \
@@ -161,6 +191,7 @@ run_test_gate() {
     -only-testing:LoopTests/WatchDosingLimitsTests \
     -only-testing:LoopTests/WatchOverrideDosingTests \
     -only-testing:LoopTests/LoanTwoSidedContractTests \
+    -only-testing:LoopTests/LoanCarbDeleteTests \
     -only-testing:LoopTests/ICEInvalidationTests \
     >>"$RUNLOG" 2>&1 || rc=$?
   cat "$RUNLOG" >> "$LOG"
