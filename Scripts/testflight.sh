@@ -136,7 +136,9 @@ fi
 # Deliberately scoped to the Sport-Mode suites: the full LoopTests target carries upstream
 # tests we neither own nor keep green, and a gate that is routinely red gets disabled.
 # ~7 s for 111 tests; skip only with SKIP_TESTS=1 for an emergency ship, which is logged.
-SIM_ID="BE1EB8F5-C98F-472D-B910-858C3F2F9632"   # iPhone sim; `xcrun simctl list devices` if it goes stale
+SIM_ID="70631DFE-9079-4EE5-B541-14CB75F280C5"   # "Port-NextDev" — THIS line's own sim. BE1EB8F5 belongs to
+                                               # the production-merge chat; borrowing it fails both runs with
+                                               # "the test runner is not starting" and no assertion failures.
 # Each attempt writes to its OWN log first, then appends to the pipeline log. The diagnostic
 # greps below read RUNLOG, so they describe THE LAST ATTEMPT ONLY. Reading the appended
 # pipeline log instead (as this did before 2026-08-12) makes a retry's diagnostics include
@@ -178,7 +180,8 @@ run_test_gate() {
 # Use the WatchAppTests scheme, never WatchApp: that scheme sets buildImplicitDependencies=NO,
 # which is correct for the device-install path it was written for and fails against a SIMULATOR
 # (LoopCore compiles before LoopKit exists). Do not "fix" that by flipping the flag.
-WATCH_SIM_ID="486D8F78-FE73-4630-A1C6-A9D4645F99A3"   # Apple Watch Series 11 (46mm), watchOS 26.5
+WATCH_SIM_ID="6F1A0ECD-08FD-49F0-91D9-5E8C3E21FE6A"   # "Port-NextDev Watch", watchOS 26.5 (matches the
+                                                       # deployment target). 486D8F78 is the other chat's.
 WATCH_RUNLOG="$OUT/.gate-watch.log"
 # NOT YET PORTED on this branch. WatchAppTests is a fork-only target; bringing it across is the
 # next task. Until then this gate REFUSES rather than passing quietly — the watch is precisely the
