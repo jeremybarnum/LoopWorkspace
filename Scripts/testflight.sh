@@ -368,6 +368,45 @@ else
   note "WATCH GATE ok — $(grep -oE 'Executed [0-9]+ tests, with [0-9]+ failures' "$WATCH_RUNLOG" | tail -1 || true)"
 fi
 
+# ONE TESTFLIGHT TRAIN FOR JEREMY'S TWO BRANCHES.
+#
+# TestFlight groups builds by MARKETING VERSION and offers the HIGHEST VERSION as the one to
+# install — not the highest build number. The two lines disagree on it:
+#
+#     production-merge (this tree)            LOOP_MARKETING_VERSION = 3.14.3
+#     next-dev (~/Downloads/Loop/trees/port-nextdev)  LOOP_MARKETING_VERSION = 3.15.1
+#
+# Both are com.StockSportMode, so they upload into ONE App Store Connect record. Build numbers
+# are not the problem — manageAppVersionAndBuildNumber (both trees) makes ASC assign the next
+# available number, but it assigns it PER TRAIN, so two trains means two counters.
+#
+# So they land in separate trains, and 3.15.1 wins the Update button no matter how new the
+# 3.14.3 build is. Observed 2026-08-17: build 304 uploaded cleanly and was invisible on the
+# phone, which showed 3.15.1 (64) instead — and tapping Update there would have installed
+# next-dev's EXTENSIONLESS watch app, the exact thing that cannot replace this line's
+# extension-based one (MIInstallerErrorDomain 153). A version string quietly became a trap.
+#
+# Pinning both lines to one version puts every build in one train, ordered by build number,
+# which is what "toggle between branches" actually needs. The version is meaningless for
+# testing; it is a grouping key, nothing more.
+#
+# Applied to JEREMY'S builds only. Caitlin's app is a separate App Store Connect record with
+# its own trains, so it needs no unification — and bumping the version she sees, to match a
+# branch she does not run, would be a gratuitous change to a live therapy device.
+#
+# Expect the build number to STEP BACKWARDS once, and do not read it as a mistake: the 3.14.3
+# train is at 304 and the 3.15.1 train is at 64, so the first unified upload becomes 65. From
+# there it is one counter for both branches, which is the property that was actually wanted.
+#
+# Keep this equal to whatever next-dev uses. If that line bumps its version, bump this to match;
+# they only need to AGREE, and the value itself does not matter.
+UNIFIED_TF_VERSION="3.15.1"
+VERSION_OVERRIDE=()
+if [[ "$FOR_PERSON" == "jeremy" ]]; then
+  VERSION_OVERRIDE=(LOOP_MARKETING_VERSION="$UNIFIED_TF_VERSION")
+  note "version: pinning to $UNIFIED_TF_VERSION so both branches share one TestFlight train"
+fi
+
 note "ARCHIVE starting (LoopWorkspace scheme, Release) — the long step; log: $LOG"
 caffeinate -is xcodebuild \
   -workspace "$ROOT/LoopWorkspace.xcworkspace" \
@@ -376,6 +415,7 @@ caffeinate -is xcodebuild \
   -archivePath "$ARCHIVE" \
   -derivedDataPath "$DD" \
   -allowProvisioningUpdates \
+  "${VERSION_OVERRIDE[@]}" \
   archive >>"$LOG" 2>&1 || { note "ARCHIVE FAILED — last lines:"; grep -B2 -A6 "error:" "$LOG" | tail -40 || tail -40 "$LOG"; exit 65; }
 note "ARCHIVE ok: $ARCHIVE"
 
