@@ -6,11 +6,22 @@
 # After this succeeds, App Store Connect processes the build (~5-15 min) and
 # TestFlight notifies the phone; installing from TestFlight stays manual.
 #
-#   Usage:  Scripts/testflight.sh                      # gate + archive + upload
-#           Scripts/testflight.sh --archive-only       # gate + archive, stop before upload
-#           Scripts/testflight.sh --upload-only        # upload the NEWEST existing archive
-#           Scripts/testflight.sh --upload-only <path> # upload a specific archive
-#           ... --upload-only --force                  # upload even if the archive is stale
+#   Usage:  Scripts/testflight.sh --for <person>                 # gate + archive + upload
+#           Scripts/testflight.sh --for <person> --archive-only  # stop before upload
+#           Scripts/testflight.sh --for <person> --upload-only   # upload the NEWEST archive
+#           Scripts/testflight.sh --for <person> --upload-only <path>
+#           ... --upload-only --force                            # upload a stale archive
+#
+# --for is REQUIRED and names a PERSON (jeremy, caitlin), never a bundle string. Identity is
+# one uncommitted line in LoopConfigOverride.xcconfig that silently follows whoever was built
+# for last, in whichever checkout — the build log does not say, and the on-wrist tag cannot
+# (CFBundleVersion is pinned). A wrong identity installs a SECOND app rather than an upgrade,
+# leaving the running pod bound to the old app; deleting that app to tidy up strands the pod.
+#
+# So this door ASSERTS twice and restores nothing. Once against the tree before building, and
+# again against the finished archive's Info.plist before uploading — an archive is immutable
+# bits that may have been built hours ago under the other identity, so the xcconfig alone is
+# not evidence about what is being shipped. See ops/identity.sh.
 #
 # --upload-only exists because the archive is the expensive step (~3.5 min) and the upload is
 # the fragile one: on 2026-08-12 App Store Connect returned "The Internet connection appears to
@@ -58,19 +69,38 @@ note() { print -- "$(date +%H:%M:%S) $1" | tee -a "$LOG" }
 MODE="full"           # full | archive-only | upload-only
 FORCE=0
 UPLOAD_ARCHIVE=""
+FOR_PERSON=""
+IDENTITY="${BASE:h}/ops/identity.sh"   # outside every checkout, beside install-pair.sh
 while (( $# )); do
   case "$1" in
     --archive-only) MODE="archive-only" ;;
     --upload-only)  MODE="upload-only" ;;
     --force)        FORCE=1 ;;
+    --for)          shift; FOR_PERSON="${1:-}" ;;
     -*)             echo "unknown flag: $1"; exit 64 ;;
     *)              UPLOAD_ARCHIVE="$1" ;;
   esac
   shift
 done
 
+# Required, and deliberately with no default. A default is a guess about whose device is on
+# the other end of this, and the whole point is that nothing here guesses.
+[[ -n "$FOR_PERSON" ]] || {
+  echo "testflight.sh: --for is required. Who is this build for? (jeremy, caitlin)"
+  echo "  e.g. Scripts/testflight.sh --for caitlin --archive-only"
+  exit 64
+}
+[[ -x "$IDENTITY" ]] || { echo "testflight.sh: cannot find ops/identity.sh at $IDENTITY"; exit 64; }
+"$IDENTITY" assert "$FOR_PERSON" --tree "$ROOT" || exit $?
+note "identity: building for $FOR_PERSON ($("$IDENTITY" bundle-id "$FOR_PERSON"))"
+
 do_upload() {
   local archive="$1"
+  # The last gate before bits leave this Mac. Deliberately re-derived from the ARCHIVE
+  # rather than from the config: the archive is what ships, and it can predate the current
+  # xcconfig by any amount — including a --upload-only of something built for the other
+  # person yesterday.
+  "$IDENTITY" assert-archive "$FOR_PERSON" "$archive" || exit $?
   note "UPLOAD starting (destination=upload; ASC assigns the next build number)"
   note "  archive: ${archive:t}"
   caffeinate -is xcodebuild \
@@ -161,6 +191,7 @@ run_test_gate() {
     -only-testing:LoopTests/WatchDosingLimitsTests \
     -only-testing:LoopTests/WatchOverrideDosingTests \
     -only-testing:LoopTests/LoanTwoSidedContractTests \
+    -only-testing:LoopTests/LoanCarbDeleteTests \
     -only-testing:LoopTests/ICEInvalidationTests \
     >>"$RUNLOG" 2>&1 || rc=$?
   cat "$RUNLOG" >> "$LOG"
@@ -337,6 +368,47 @@ else
   note "WATCH GATE ok — $(grep -oE 'Executed [0-9]+ tests, with [0-9]+ failures' "$WATCH_RUNLOG" | tail -1 || true)"
 fi
 
+# ONE TESTFLIGHT TRAIN FOR JEREMY'S TWO BRANCHES.
+#
+# TestFlight groups builds by MARKETING VERSION and offers the HIGHEST VERSION as the one to
+# install — not the highest build number. The two lines disagree on it:
+#
+#     production-merge / pure                 LOOP_MARKETING_VERSION = 3.14.3
+#     next-dev (~/Downloads/Loop/trees/port-nextdev)  LOOP_MARKETING_VERSION = 3.15.1
+#
+# Both are com.StockSportMode, so they upload into ONE App Store Connect record. Build numbers
+# are not the problem — manageAppVersionAndBuildNumber (both trees) makes ASC assign the next
+# available number, but it assigns it PER TRAIN, so two trains means two counters.
+#
+# So they land in separate trains, and 3.15.1 wins the Update button no matter how new the
+# 3.14.3 build is. Observed 2026-08-17: build 304 uploaded cleanly and was invisible on the
+# phone, which showed 3.15.1 (64) instead — and tapping Update there would have installed
+# next-dev's EXTENSIONLESS watch app, the exact thing that cannot replace this line's
+# extension-based one (MIInstallerErrorDomain 153). A version string quietly became a trap.
+#
+# Pinning both lines to one version puts every build in one train, ordered by build number,
+# which is what "toggle between branches" actually needs. The version is meaningless for
+# testing; it is a grouping key, nothing more.
+#
+# All three of Jeremy's lines (pure, Caitlin-as-jeremy, next-dev) therefore share one train.
+#
+# Applied to JEREMY'S builds only. Caitlin's app is a separate App Store Connect record with
+# its own trains, so it needs no unification — and bumping the version she sees, to match a
+# branch she does not run, would be a gratuitous change to a live therapy device.
+#
+# Expect the build number to STEP BACKWARDS once, and do not read it as a mistake: the 3.14.3
+# train is at 304 and the 3.15.1 train is at 64, so the first unified upload becomes 65. From
+# there it is one counter for both branches, which is the property that was actually wanted.
+#
+# Keep this equal to whatever next-dev uses. If that line bumps its version, bump this to match;
+# they only need to AGREE, and the value itself does not matter.
+UNIFIED_TF_VERSION="3.15.1"
+VERSION_OVERRIDE=()
+if [[ "$FOR_PERSON" == "jeremy" ]]; then
+  VERSION_OVERRIDE=(LOOP_MARKETING_VERSION="$UNIFIED_TF_VERSION")
+  note "version: pinning to $UNIFIED_TF_VERSION so both branches share one TestFlight train"
+fi
+
 note "ARCHIVE starting (LoopWorkspace scheme, Release) — the long step; log: $LOG"
 caffeinate -is xcodebuild \
   -workspace "$ROOT/LoopWorkspace.xcworkspace" \
@@ -345,6 +417,7 @@ caffeinate -is xcodebuild \
   -archivePath "$ARCHIVE" \
   -derivedDataPath "$DD" \
   -allowProvisioningUpdates \
+  "${VERSION_OVERRIDE[@]}" \
   archive >>"$LOG" 2>&1 || { note "ARCHIVE FAILED — last lines:"; grep -B2 -A6 "error:" "$LOG" | tail -40 || tail -40 "$LOG"; exit 65; }
 note "ARCHIVE ok: $ARCHIVE"
 
