@@ -348,6 +348,12 @@ intents across the session.** [MEAS]
   succeeded 3.0 s after it. WorkOutDoors reports exactly this — watchOS being slow to release a
   connection, so the next attempt hits the limit transiently.
 
+**UPDATE 2026-08-19, loan e132 — (A) confirmed at n=2, and (B) weakened.** A second refusal, still on
+pre-fix code, carried the identical `timedConnect` + `adopt-retry` same-millisecond signature — but
+this time the G7 was CONNECTED (not released 2.3 s earlier) and ORPHANED was **0** for the whole
+session. G7 state differs, orphan count differs, the duplicate is present in both. See
+`POD_COMMS_FIELD_2026-08-18.md` for the comparison table.
+
 The retry succeeding 0.75 s later fits both. **(A) is ours, cheap, and correct under either theory**,
 so it is the fix that went in (2026-08-19): `noteConnectIssued` now returns a verdict and callers skip
 the `connect()` when one is already in flight. Suppressions are COUNTED (`suppressed=N` in the ledger

@@ -301,3 +301,66 @@ registration wrong, and hand-back depends on it** (local installs are not a clea
 `appInstalled=true` is confirmed); and **the watch has no ceiling on the returning-records state**, so
 it spins indefinitely when the phone already owns the pod. Nothing is at risk when that happens — but
 it looks exactly like the state where something is.
+
+
+---
+
+## 2026-08-19 e132 — the duplicate-connect signature CONFIRMS at n=2
+
+Second loan, still on PRE-FIX code (the ledger line carries no `suppressed=`, so the guard was not
+in this build). One `Code=11`, and it matches the first on the one factor that matters. [MEAS]
+
+```
+14:16:40.687  g7-ble didConnect DXCMqL                  <- G7 UP (unlike 12:56)
+14:16:49      [intent] connect via timedConnect -> open=1 issued=11
+14:16:49      [intent] connect via adopt-retry  -> open=1 issued=11   <- SAME INSTANT
+14:16:49      [intent] refused  /  CBErrorDomain Code=11
+14:16:51.594  g7-ble didDisconnect DXCMqL
+```
+
+| | 12:56:53 (e131) | 14:16:49 (e132) |
+|---|---|---|
+| G7 link | disconnected 2.3 s earlier | **connected, mid-window** |
+| ORPHANED | 1 | **0** |
+| `timedConnect` + `adopt-retry` in the same millisecond | yes | **yes** |
+
+**The G7 state differs between them. The orphan count differs — e132 ran ORPHANED=0 for the whole
+session and still produced a refusal, which is an independent second nail in the leak theory. The
+duplicate connect is the only factor present in both.** The guard shipped 2026-08-19 targets exactly
+this; `suppressed=N` in the next run is the confirmation to look for.
+
+### Still open: the late-session ladder collapse is NOT G7 recency
+
+L1–L6 all OK (0–18.6 s). L7–L11 all FAILED (28 s each; L7 ran 583 s). But the failures span
+`g7direct=28s` to `g7direct=1254s` — freshly-connected sensor and twenty-minutes-silent sensor alike.
+
+**This kills the 2026-08-18 correlation** in the table at the top of this document, where the two
+successes had the G7 quiet for 269 s and 300 s. With a larger sample the relationship does not hold.
+Whatever separates early-session from late-session reclaims, it is not the sensor's recency, and the
+"G7 scanning is the disease" framing should not be revived on that evidence.
+
+### Separate finding: the G7 stack was itself churning
+
+`didConnect` and `didDisconnect` in the SAME MILLISECOND, repeatedly (13:56:41.653, 14:01:41.787/.791,
+14:08:21.632/.633), plus `Sensor error: Error enabling notification for authentication: timeout`.
+That is #101-class churn on the sensor side. It belongs in the G7 story, not the pod one, and mixing
+them is how the 2026-08-18 headline went wrong.
+
+### Observability: the phone's container is a direct log source, and it does not need iCloud
+
+`devicectl device copy from --domain-type appDataContainer --domain-identifier com.StockSportMode.Loop
+--source Documents` pulls BOTH `g7phone-*.log` and `g7watch-*.log` off the phone, because
+`WatchDataManager` writes the watch mirror to Documents as well as to iCloud. On 2026-08-19 the iCloud
+mirror was dead for six hours (hotspot deferring iCloud Drive) and this path was unaffected.
+
+It does NOT replace iCloud: remote work, where the phone and watch are not on the Mac's network, still
+needs the mirror. Two paths, different failure modes — use whichever the situation leaves standing.
+
+### The install ritual gained a REQUIRED step
+
+`appInstalled` went true at **13:41:42**, on a workspace reinstall of the PHONE app following a direct
+watch install — and stayed true through e132, which settled clean (`reclaim VERIFIED +1s`). So:
+
+**direct-install the watch, then reinstall the phone app from the workspace scheme.** Skipping the
+second half leaves `WCSession.isWatchAppInstalled` false, which queues every hand-back ack and wedges
+the watch on "returning records" (see the 4.2 section of BLE_ECOSYSTEM_MODEL.md).
