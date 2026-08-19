@@ -88,6 +88,47 @@ three different things layered:
    STARTED → ad DISCOVERED gaps of 4m37s, 4m46s), and
 3. the ~10 s of actual connection each cycle.
 
+### 2.1a "If it's bonded and the grid is known, why scan at all?"
+
+The obvious question, and the answer has three parts. (Jeremy, 2026-08-19.)
+
+**A bond lets you skip PAIRING, not skip DISCOVERY.** [PHYS] There is no "call the sensor at
+time T" primitive in BLE. A connection can only be initiated by answering an advertisement, in
+the milliseconds after it is heard, and the initiator must have its receiver open at that moment.
+Even `connect()`-and-wait is a scan underneath — bluetoothd listens for that address on your
+behalf. So *someone* must be listening during the sensor's window, bond or no bond. Knowing the
+schedule does not remove the doorway; it only tells you when to stand in it.
+
+**We know the grid approximately, not exactly.** [MEAS] Our own inter-window gaps are 4m37s and
+4m46s, not 5:00.00 — the sensor keeps its own clock and it drifts against ours, the window is
+short (~10–15 s), and the penalty for missing it is a full 5 minutes. So "connect at the known
+time" really means "open the receiver over a guard band wide enough for mutual drift plus
+jitter." Small, but not zero.
+
+**The guard band CAN be small, and crude proved it.** [MEAS] That is exactly crude's recipe —
+"scan is the primitive, fresh lead-time arming, 300−45 geometry": arm ~45 s before the predicted
+window instead of scanning ~270 s. Validated overnight in closed loop. So the question is not
+whether scheduled scanning works; it is why next-dev does not do it. The answer is unremarkable:
+stock G7SensorKit was written for the **phone**, where continuous scanning costs nothing anyone
+measures and never-miss-a-window robustness (drift, restarts, warm-up, backfill, resync) beats
+efficiency. We inherited phone economics onto a watch whose receiver is shared with pod
+acquisition.
+
+**And next-dev has a doorway that needs no scan of ours at all.** [MEAS] Trigger b —
+connection-event monitoring — fires when the *Dexcom app's* link to the sensor comes up
+(`connection-event CONNECT DXCMqL — handling`), letting us connect into an already-open window
+at Dexcom's expense rather than our own. Trigger c (our scan) exists for first contact after
+relaunch and as insurance when the Dexcom app misses a window.
+
+**So the preference ordering should be: connection events first, guard-band scheduled scan
+second, continuous scan never.**
+
+**Important caveat, or this becomes the fourth wrong theory:** shrinking the G7 scan is a real
+win in receiver time and coexistence pressure, but it probably does **not** touch the Code=11
+disease. Code=11 is a *connection-table* error and **a scan holds no table entry**. If we fixed
+only the scan and left the intent churn alone, the expectation is that the lockups continue.
+Scan geometry and intent hygiene are separate problems that happen to share a symptom.
+
 **[Jeremy/ground-truth]** The sensor accepts up to **three** collectors. On the watch during a
 window, plausibly two of those are in play: the Dexcom watch app's own link and ours (the
 "piggyback"). Whether the sensor serves collectors simultaneously or sequentially within one
@@ -174,5 +215,9 @@ test — but every component of it is individually [MEAS].]
    audit connectOnDemand's fallback the same way. Correct under any theory.
 3. **If acquisition must stay reactive anywhere, schedule it** in the G7's quiet 4½ minutes —
    crude's transferable lesson — rather than colliding with windows blindly.
-4. **Re-verify the "outage"** with the new instrumentation AND the D2W control before treating
+4. **Re-order the G7's doorways: connection events, then a guard-band scan, never continuous**
+   (2.1a). Frees ~3½ minutes of receiver time per cycle for pod acquisition. Ranked BELOW 1 and 2
+   deliberately: it addresses airtime, and the measured disease is table exhaustion. Worth doing
+   on its own merits; not to be mistaken for the cure.
+5. **Re-verify the "outage"** with the new instrumentation AND the D2W control before treating
    any G7 gap as a sensor fact.
