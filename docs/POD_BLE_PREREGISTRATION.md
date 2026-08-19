@@ -276,6 +276,46 @@ is candidate (2).
 **Cheapest next experiment:** a SHORT phone-off — two or three minutes — and time the recovery from the
 moment of power-off. Costs almost nothing and splits the four branches above in a single run.
 
+#### H9b — Dexcom's OWN remedy is a Bluetooth toggle, and its stated wait is HALF the natural heal
+
+Jeremy, 2026-08-19: *"the Dexcom app recommends toggling bluetooth and waiting 10 minutes in response
+to sensor failure."*
+
+**Two things follow, and the second is a real prediction.**
+
+**(i) BT toggle is now the universal remedy across three unrelated symptoms in this project:**
+
+| symptom | remedy | source |
+|---|---|---|
+| pod unreachable from BOTH devices after hand-back | BT toggle | field-proven 2026-08-19 |
+| watch not appearing for `devicectl` discovery | BT toggle | field 2026-08-19 |
+| **Dexcom sensor signal loss** | **BT toggle** | **Dexcom's own app** |
+
+Three failures that look unrelated, one remedy, and one of them prescribed by the hardware vendor. That
+is convergent evidence the shared state is connection-table / registration bookkeeping at the OS or
+controller level, not anything specific to our code. It also means the BT toggle is not folk remedy in
+ANY of the three cases — the vendor ships it as the documented fix.
+
+**(ii) The DURATIONS differ, and that is the testable part.** Dexcom says wait **10 minutes** after a
+toggle. Jeremy's observed natural heal, with no intervention, is **25–30 minutes**.
+
+> **PREDICTION: the BT toggle roughly HALVES the recovery.** If the toggle is merely a placebo that
+> fills the wait, both numbers should be the same. They are not.
+
+Two reproducible durations for the same end state is hard for candidate (4) — coincidence does not
+predict a shorter number under a specific intervention. It fits (2) cleanly: a stale reservation that
+either EXPIRES on its own (~25 min) or is CLEARED by resetting the connection table (~10 min).
+
+**Test:** next time the outage appears, toggle Bluetooth immediately and time the recovery from the
+toggle. ~10 min supports (2) strongly; ~25 min from the original disturbance regardless means the
+toggle does nothing and the vendor's advice is itself cargo cult; anything else is new information.
+
+**Note the asymmetry worth thinking about:** the stale collector slot, if that is what this is, would be
+held by the SENSOR on behalf of the dead phone. A toggle on the WATCH does not obviously free it — so
+if the toggle works, the mechanism is more likely that it forces D2W to re-negotiate and the sensor
+evicts the stale entry on demand. That distinction matters, because only one of those two stories
+predicts the toggle helping when done on a device that was never the one that vanished.
+
 ---
 
 ## Run protocol — conditions that invalidate a run

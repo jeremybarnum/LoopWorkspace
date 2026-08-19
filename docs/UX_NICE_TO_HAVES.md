@@ -122,6 +122,11 @@ otherwise looks like a lost pod, and a user who does not know it will assume the
 **Cost:** none, and the fit between the remedy and the diagnosis is good: a BT toggle resets the
 connection table, which is the resource the failure implicates.
 
+**Strengthened 2026-08-19:** the Dexcom app itself prescribes a Bluetooth toggle (and a 10-minute wait)
+for sensor signal loss. So this is the vendor's documented remedy, not our folk remedy — which makes it
+much easier to justify surfacing, and means users of any CGM-adjacent app have likely seen the
+instruction before.
+
 ---
 
 ## 8. The yellow "reaching pod" state may now be showing for nothing
