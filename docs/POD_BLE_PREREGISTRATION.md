@@ -42,7 +42,8 @@ pod visibility".** H4/H5/H6 below are attempts to find out which.
 | H1 | The G7's near-continuous scanning starves the pod's connect | correlate reclaim outcome with G7 quiet time | **DEAD** — e132 failures span g7direct 28 s to 1254 s |
 | H2 | Leaked connect intents (`recreateCentral`) exhaust the connection table | count ORPHANED; see whether Code=11 tracks it | **DEAD** — ORPHANED=1 across SUCCESSFUL connects; e132 had a refusal at ORPHANED=0 |
 | H3 | Two of our own connect paths race and CoreBluetooth refuses the duplicate | do refusals coincide with two `connect via` lines in one millisecond? | **SUPPORTED, n=2** — but see H4: it happens inside ladders that SUCCEED |
-| H4 | The dominant failure is DISCOVERY, not connection | classify every ladder by connects issued | **SUPPORTED, n=11** — every FAILED ladder issued ZERO connects |
+| H4 | The dominant failure is DISCOVERY, not connection | classify every ladder by connects issued | **CONFIRMED** — 8/8 failed ladders heard `adverts=0 last=never` |
+| H5 | The pod is invisible because something still holds it | advert census + the phone's own intent ledger | **CONFIRMED — it is the PHONE**, connecting every 2–3 min while `released=true`, every connect succeeding |
 
 H3 is real and fixed. **H4 is why fixing H3 will not fix the reclaim failures**, and saying so plainly
 is the point of this table.
@@ -54,7 +55,54 @@ is the point of this table.
 The instruments: per-ladder advert count + RSSI (`adverts=N last=Ns rssi=X` on every ladder line), a
 `** CONNECT WHILE ON LOAN **` alarm in the BLE layer, and the phone's pod-link state on its 60 s census.
 
-### H5 — The pod is not advertising, because something still holds it
+### H5 — CONFIRMED 2026-08-19 16:25–16:35. **The phone connects to the pod throughout the loan.**
+
+**This was Jeremy's hypothesis, offered as the thing he believed impossible:** *"is there any chance
+that part of what's happening is that there is watch-phone contention for the pod? In my mind, that's
+impossible — literally what the whole loan concept avoids."* It is not impossible. It is happening on
+a 2–3 minute cadence, and it is the dominant failure.
+
+**The phone's own intent ledger, while `released=true` for the entire window:** [MEAS]
+
+```
+16:25:47  e136 GRANT — releasing pod BLE      pod: released=false -> true    issued=3 ok=3
+16:26:44  census                              pod: released=true             issued=4 ok=4   <- connect, SUCCEEDED
+16:29:49  census                              pod: released=true             issued=5 ok=5   <- connect, SUCCEEDED
+16:31:04  loan ABANDONED -> settle: link up +0.0s, reclaim VERIFIED +0s
+16:31:21  e137 GRANT — releasing pod BLE      pod: released=true             issued=6 ok=6   <- connect
+16:34:49  census                              pod: released=true             issued=7 ok=7   <- connect
+```
+
+`ok` climbs in lockstep with `issued`: every one of those connects SUCCEEDED. The phone knows it lent
+the pod — `released=true` throughout — and connects anyway.
+
+**The watch, over the same period: 8 of 8 ladders FAILED with `adverts=0 last=never rssi=-`.** Not one
+advertisement in 28 seconds, eight times. A pod in a connection does not advertise, so the watch was
+scanning for something that could not be heard by construction.
+
+**And the tell we had been staring at for two days:** the phone reports `settle: link up +0.0s` the
+instant the watch gives up — twice today. A cold Omnipod connect takes ~17 s. `+0.0s` was never
+"the phone reconnected quickly"; it was "the phone never let go."
+
+**What is proven, and what is not.**
+
+- PROVEN: the phone issues successful pod connects during a loan while its own release flag is true.
+- PROVEN: the watch hears zero advertisements during exactly those windows.
+- STRONGLY INFERRED: the former causes the latter (a connected pod does not advertise).
+- **NOT YET KNOWN: which code path on the phone is connecting.** The `via:` reason is captured in the
+  `** CONNECT WHILE ON LOAN **` alarm, but `omnipodLogDeviceEvent` routes to LoopKit's device-comms
+  store rather than `PhoneLog`, so on the PHONE the alarm goes somewhere unreadable. Fixing that
+  routing names the mechanism in one run. It is the next thing to do.
+
+**Why this vindicates the null hypothesis.** Jeremy: *"the question is more about whether we have
+over-engineered something, and the result is unnecessary chaos."* The radios were never the problem.
+Two slots, two devices, no platform limit implicated. What was missing is an interlock: **OmnipodKit
+has no concept of a loan**, isolation was achieved indirectly by emptying `autoConnectIDs`/`devices`,
+and any path that does not consult those collections was free to connect. It did.
+
+---
+
+### H5 (original statement, kept for the record) — The pod is not advertising, because something still holds it
 
 **Claim.** A failed ladder sees `adverts=0` because the pod is connected to another central — most
 likely the phone, whose release is asynchronous or incomplete. A connected BLE peripheral does not
