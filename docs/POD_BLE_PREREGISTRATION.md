@@ -189,6 +189,55 @@ the pod is uncontested: it advertises, the watch hears it, and reclaims succeed.
 
 ---
 
+### H9 — PRE-REGISTERED 2026-08-19 ~17:15, BEFORE the data. **Why does Dexcom drop 10–20 min after the phone is powered off?**
+
+**The observation.** 2026-08-19: phone off at 17:01; at ~17:11 Loop's own status was unchanged and
+healthy while the DEXCOM watch app reported signal loss. Jeremy reports recognising this pattern from
+previous sessions, including that **it heals itself in 10–20 minutes**.
+
+**Why it matters commercially, not just diagnostically.** Jeremy: *"for someone doing 1 hour of
+exercise immediately after shutting down the phone, it's a bit of a bummer."* Phone-off exercise is the
+product's core use case. A 10–20 minute CGM gap at the start of it is not an edge case.
+
+**Priors, recorded BEFORE the data — Jeremy's, since this is his observation and his device history:**
+
+| candidate | Jeremy | mine (after the code check below) |
+|---|---|---|
+| **(2) Collector-slot bookkeeping** — an abrupt power-off never gracefully tears down the phone's link, so the sensor holds that collector reserved until it times out. 10–20 min ≈ 2–4 sensor windows. | **40%** | 40% |
+| **(4) Coincidence** — sensors drop out on their own | **35%** | 30% |
+| **(1) Not a radio event** — D2W renders a phone-dependent state as "signal loss" | ~5% | 5% |
+| **(3) We squeeze D2W** — our G7 path works harder with the phone gone | ~5% | **2%** |
+| **Something else not yet imagined** | **20%** | 23% |
+
+**(3) is all but eliminated by code, not by argument.** `G7SensorKit` never consults phone
+reachability — there is no such branch anywhere in it, and the only `reachable` reference in the entire
+watch extension is an error log on a glucose-backfill request. There is no "work harder when the phone
+is away" path to invoke. Jeremy called this implausible on instinct; the code agrees.
+
+**The test, and it needs no new instrumentation.** Our G7 stack already records the OS telling us when
+D2W connects:
+
+```
+[g7-ble] connection-event CONNECT DXCMqL — ignored, have active
+```
+
+So D2W's own connection cadence is visible in OUR log. Extract it across the 17:01 boundary:
+
+- **D2W connect events CONTINUE at the normal ~5 min rhythm through the reported outage** → (1). The
+  sensor was fine and the message is about the phone. Cheapest to check, so check it first.
+- **D2W connect events STOP at/after 17:01 and resume ~10–20 min later, while OUR readings continue
+  uninterrupted** → (2). Our collector slot was never disturbed; D2W's was, which is what a stale
+  reserved slot would do.
+- **BOTH stop** → not a collector-allocation story at all; the sensor itself went quiet. Points at (4)
+  or the unknown 20%.
+- **Our own scan/connect rate visibly rises after 17:01** → (3), and the code reading above is wrong.
+
+**Falsifier for the whole frame:** if D2W's cadence is unchanged across the boundary in a session where
+Jeremy observed the outage, then the outage is not a connection phenomenon and every candidate above is
+mis-specified.
+
+---
+
 ## Run protocol — conditions that invalidate a run
 
 - **No builds during a loan.** Installing replaces the watch app and kills it mid-loan; the phone then
