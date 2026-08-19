@@ -121,3 +121,28 @@ otherwise looks like a lost pod, and a user who does not know it will assume the
 
 **Cost:** none, and the fit between the remedy and the diagnosis is good: a BT toggle resets the
 connection table, which is the resource the failure implicates.
+
+---
+
+## 8. The yellow "reaching pod" state may now be showing for nothing
+
+**Seen:** 2026-08-19, Jeremy: *"in the latest builds, there is almost no lag after bolus instructions.
+That means the brief yellow 'reaching pod' may not be necessary."*
+
+**Why it changed:** the reclaim ladder is completing fast. Note the observation was made with the PHONE
+POWERED OFF, during the H8 test — and the phone holding the pod is the confirmed cause of slow ladders
+(H5). So the speed may be a property of that condition, not of the build.
+
+**Do NOT simply delete it.** If the lag returns with the phone on, removing the indicator leaves a
+silent multi-second wait with nothing on screen to explain it — and a bolus that appears to do nothing
+is the worst thing this UI can do.
+
+**Candidate: delay the reveal rather than remove it.** Show nothing for the first ~400 ms, then fade
+the yellow state in if the pod still has not answered. Fast path looks instant; slow path still
+explains itself. This is the standard progress-indicator pattern and it needs no judgement about which
+regime we are in.
+
+**Cost:** trivial — one timer on the view.
+
+**Revisit after:** the phone-on arm is re-measured post-fix. If ladders are genuinely fast with the
+phone on too, the threshold can go up and the state becomes near-invisible in practice.
