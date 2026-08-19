@@ -147,6 +147,48 @@ If H7 holds, the fix is a longer or advert-driven ladder, not more machinery.
 
 ---
 
+### H8 — PRE-REGISTERED 2026-08-19, BEFORE the phone-off arm. **Turning the phone off frees the pod.**
+
+This is the intervention test of H5. H5 was observational — we watched the phone connect and watched
+the watch hear nothing. H8 removes the proposed cause and predicts the effect disappears. If H5 is
+right, this is the strongest confirmation available without touching a line of code.
+
+**Claim.** The phone's periodic connects are what keep the pod from advertising. Power the phone off and
+the pod is uncontested: it advertises, the watch hears it, and reclaims succeed.
+
+**Predicts, in order of how diagnostic each is:**
+
+1. **`adverts>0` on every ladder**, and quickly — an idle Omnipod advertises far faster than once per
+   28 s, so a freed pod should be heard within seconds, with a real RSSI (both devices are on the same
+   body, so expect a strong one).
+2. **Ladders SUCCEED**, and fast — the ones that worked earlier today ran 0–18 s, against the uniform
+   28 s timeouts of the failures.
+3. **The failure rate collapses.** Baseline for comparison: **8 of 8 ladders failed** in the phone-on
+   arm, every one at `adverts=0 last=never`.
+
+**Falsified by:**
+
+- **`adverts=0` persisting with the phone off.** This is the important falsifier. It would mean the
+  phone is not the mechanism — or not the only one — and would revive H6 (watchOS throttling our
+  background scan), which the phone-on data cannot currently distinguish from H5.
+- **`adverts>0` but ladders still failing.** A different bug entirely: we hear the pod and cannot
+  connect to it. Nothing so far predicts this, which is what makes it worth watching for.
+
+**Confounders, named in advance so they are not discovered afterwards:**
+
+- **The sensor's collector count drops 3 → 2** (phone + D2W + Sport Mode becomes D2W + Sport Mode). If
+  G7 behaviour also improves, that is a SECOND effect of the same action and must not be credited to
+  the pod story. Watch `g7direct` separately.
+- **The log mirror dies with the phone.** The watch relays its log via WCSession to the phone, so a
+  phone that is off is exactly what stops the record — the reason `ops/watch-logs-pull.sh` exists.
+  Plan the retrieval BEFORE switching off (see protocol below).
+- **No dead-man reclaim while the phone is off.** If the watch fails, nothing takes the pod back until
+  the phone returns. Acceptable on the bench rig; would not be acceptable otherwise.
+
+**Record:** the exact minute the phone goes off, and the exact minute it comes back.
+
+---
+
 ## Run protocol — conditions that invalidate a run
 
 - **No builds during a loan.** Installing replaces the watch app and kills it mid-loan; the phone then
