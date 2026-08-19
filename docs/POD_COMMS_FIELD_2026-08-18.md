@@ -166,6 +166,34 @@ the mechanism is corroborating evidence for the mechanism.**
 Worth surfacing to users if edge cases persist — and arguably worth putting in the stuck-settle
 alert text itself, since it is a one-tap recovery for a state that otherwise looks like a lost pod.
 
+### The PHONE hits it too — so this is not a watch problem
+
+`e127` on 2026-08-19 ran its settle to the ceiling and never verified:
+
+```
+07:33:21  [watch] pod BLE teardown returned in 0.01s   ← watch released cleanly
+07:33:43  e127 settle: link still down at +22s — escalating: scan-adopt armed
+07:39:14  e127 settle CEILING at 300s — NO verified round-trip; clearing anyway
+          · ble: no diagnostics from the pump manager
+```
+
+Five minutes during which the phone could not connect to a pod nothing else was holding. Only a
+Bluetooth toggle recovered it. **Second occurrence** — `e124` on 2026-08-18 produced the identical
+message and tail.
+
+The two devices have separate BLE stacks, so this is not the same slot table as the watch's
+`Code=11`. It is the same failure *class* on both sides:
+
+- **Watch**: pod connect refused with `Code=11` while the G7 holds its link.
+- **Phone**: unable to re-acquire the pod after hand-back until its connection table is reset.
+
+Which means the framing "the watch cannot reach the pod" was too narrow, and so was
+"G7 contention". The subject is BLE connection-slot management, and both devices exhibit it.
+
+Note `ble: no diagnostics from the pump manager` on both occurrences: at the moment we most need
+to know what the phone's BLE layer thinks, it reports nothing. That gap is worth closing before
+theorising further about the phone half.
+
 ### The scan marker clears too early — a real, fixable bug
 
 `[loan-scan] marker … -> nil (adopted)` fires on *hearing a matching advertisement*, one
