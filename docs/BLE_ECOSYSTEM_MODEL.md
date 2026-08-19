@@ -278,6 +278,12 @@ test — but every component of it is individually [MEAS].] **JB okay got it, bu
 
 # Part 4 — RESOLVED: the anatomy of a Code=11, measured
 
+> **SUPERSEDED IN PART, 2026-08-19 15:15.** Everything in Part 4 is about CONNECTING, and connecting
+> turns out not to be where reclaims fail. Every FAILED ladder in e132 issued **zero** connect
+> attempts — the pod never advertised — while the Code=11 refusals happened inside ladders that
+> SUCCEEDED. Part 4 is still accurate about the refusal mechanism; it is simply about a minor failure.
+> The dominant one is DISCOVERY. See the 15:15 entry in `POD_COMMS_FIELD_2026-08-18.md`.
+
 **Everything below Part 4 was rewritten on 2026-08-19 after the connect-intent ledger reported from
 the field. Two hypotheses I argued hard for are dead. Read this before the older reasoning.**
 

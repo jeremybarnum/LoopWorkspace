@@ -364,3 +364,70 @@ watch install — and stayed true through e132, which settled clean (`reclaim VE
 **direct-install the watch, then reinstall the phone app from the workspace scheme.** Skipping the
 second half leaves `WCSession.isWatchAppInstalled` false, which queues every hand-back ack and wedges
 the watch on "returning records" (see the 4.2 section of BLE_ECOSYSTEM_MODEL.md).
+
+
+---
+
+## 2026-08-19 15:15 — THE REFRAME: the failures are DISCOVERY, not connection
+
+**This is the most important entry in this document, and it demotes everything above it — including
+the fix shipped four hours earlier.** Read it before acting on any of the connection-slot reasoning.
+
+### The measurement
+
+Every reclaim ladder in e132, classified by whether it ever issued a `connect()`: [MEAS]
+
+| ladder | verdict | duration | connects issued |
+|---|---|---|---|
+| L3 | OK | 18 s | 7 |
+| L4 | OK | 14 s | 3 |
+| L7 | FAILED | 583 s | **0** |
+| L8 | FAILED | 28 s | **0** |
+| L9 | FAILED | 28 s | **0** |
+| L10 | FAILED | 28 s | **0** |
+| L11 | FAILED | 28 s | **0** |
+
+**Every failed ladder spent its full budget on `notReady` reads without ever attempting a connection.**
+The scan armed and no advertisement ever arrived. L4 and L8 begin with byte-identical log sequences —
+escalate marker, `[loan-takeover] scan started`, 2-second reads. The only difference is that L4 hears
+`[connectOnDemand] pod heard -> connecting on fresh advert` and L8 never does.
+
+### What this kills
+
+**The Code=11 refusals occur inside ladders that SUCCEED.** L3 took a refusal and still returned OK in
+18 s. So the duplicate-connect race — n=2, real, and fixed on 2026-08-19 — costs a retry and nothing
+more. It is not why reclaims fail.
+
+Three successive framings in this document were all about CONNECTING, and all three were aimed at the
+wrong stage of the problem:
+
+1. 2026-08-18: the G7's near-continuous scanning starves our connect. **Wrong.**
+2. 2026-08-19 am: connection-slot exhaustion via leaked intents. **Wrong** (ORPHANED=0 with refusals).
+3. 2026-08-19 pm: our own duplicate connect. **Real, but minor** — it happens during successes.
+
+The failing ladders never reach the connect stage at all. **The pod is invisible to us.**
+
+### The same signature in the takeover path
+
+15:06:03 takeover, 110.9 s, `pod BLE state no-peripheral · cb: didConnect never (n=0)`, **zero connect
+intents**. The watch abandoned; the phone then reported `settle: link up +0.0s` — its link to the pod
+was live the instant it looked. A pod connected to something else does not advertise. The next
+takeover, 67 s later, connected in ~1.5 s.
+
+So "reclaim failed" and "takeover failed" are the same disease: nothing to connect to.
+
+### Candidate causes, none yet tested
+
+- **The pod is still held by the phone** after a grant/release. The phone logs `released=true
+  linkUp=false` and yet has a link up at `+0.0s` two minutes later. Lazy teardown would do this.
+- **watchOS throttles background BLE scanning.** Foreground recency correlates: all 5 successes had an
+  APP FOREGROUND within 17–20 s of ladder start; 4 of 5 failures had none for 128–430 s. **L9 breaks
+  it** (10 s, still failed), so this is suggestive, not sufficient.
+- **The pod's advertising interval** may simply exceed the 28 s ladder budget when it is idle.
+
+### What to instrument next — and it is NOT more connect-side logging
+
+The ladder must record **what the scan heard**, not just what we tried: every `didDiscover` for the pod
+filter with RSSI and timestamp, and a count of advertisements seen per ladder. A failed ladder that saw
+3 adverts is a different bug from one that saw 0. Right now we cannot tell those apart, and every
+theory above depends on which it is.
