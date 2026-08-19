@@ -236,6 +236,46 @@ So D2W's own connection cadence is visible in OUR log. Extract it across the 17:
 Jeremy observed the outage, then the outage is not a connection phenomenon and every candidate above is
 mis-specified.
 
+#### H9a — the RECOVERY CONSTANT, and the sharper test it implies
+
+Jeremy, from experience across sessions: *"these things tend to cure themselves within 25–30 minutes.
+That's the same as the 28 minute sensor warmup thing. Not sure if this is cargo cult."*
+
+Two halves, and they are not equally good evidence.
+
+**The warmup link is probably a coincidence of numbers.** Warmup is a session-START process — sensor
+chemistry settling, algorithm calibrating — while this is a collector re-establishing a link to an
+already-running sensor. Different lifecycle stages, no obvious shared timer. Not disprovable from
+outside Dexcom's firmware, but no reason to expect it either.
+
+**The recurrence of the constant is the real signal, because we have already recorded it for a
+DIFFERENT disturbance.** A standing note in this project holds that the G7 self-recovers ~25 minutes
+after a **pod takeover** — nothing to do with the phone. [Provenance: standing note carried into this
+session, NOT re-verified in this tree. Confirm against the pure branch's field observations before
+leaning on it.]
+
+Same ~25 minute constant, two unrelated causes. **That is what makes coincidence unlikely** and points
+at a single timeout downstream of both — most plausibly the sensor's own collector bookkeeping, which
+is candidate (2).
+
+**PRE-REGISTERED PREDICTION.** If it is a fixed timeout:
+
+> Recovery time is roughly CONSTANT — independent of what caused the disturbance and of how long the
+> disturbance lasted. A 2-minute phone-off and a 40-minute phone-off should both heal ~25 minutes after
+> the DISTURBANCE, not ~25 minutes after the RESTORATION.
+
+**Discriminates hard:**
+
+- **Constant recovery regardless of disturbance length** → a fixed timeout. Near-conclusive for (2).
+- **Recovery scaling with disturbance length** → not a timeout; something proportional, e.g. a backoff
+  that grows while the condition persists.
+- **Recovery timed from RESTORATION rather than from disturbance** → the healing is triggered by the
+  phone's return, which would make it a re-negotiation on reconnect, not a lapsed reservation.
+- **Recovery varying randomly** → coincidence, candidate (4), Jeremy's 35%.
+
+**Cheapest next experiment:** a SHORT phone-off — two or three minutes — and time the recovery from the
+moment of power-off. Costs almost nothing and splits the four branches above in a single run.
+
 ---
 
 ## Run protocol — conditions that invalidate a run
