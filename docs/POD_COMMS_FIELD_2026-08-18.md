@@ -431,3 +431,64 @@ The ladder must record **what the scan heard**, not just what we tried: every `d
 filter with RSSI and timestamp, and a count of advertisements seen per ladder. A failed ladder that saw
 3 adverts is a different bug from one that saw 0. Right now we cannot tell those apart, and every
 theory above depends on which it is.
+
+
+---
+
+## 2026-08-19 17:45 — the hand-back wedge, its blast radius, and a retracted diagnosis
+
+### A phone REBOOT resets the companion registration, and that wedges the hand-back
+
+`appInstalled` was **true** at 16:23:28, survived the phone being POWERED OFF for 41 minutes, and came
+back **false** once the phone booted again. So the registration does not break when the phone is
+absent — it breaks on the boot cycle. [MEAS]
+
+Consequence, straight from the phone's own log while the watch tried to end the loan:
+
+```
+17:44:39  appInstalled=false  reachable=false
+17:45:38  [loan] e137 offer RX ev=6 released=interim state=loaned      <- the offer ARRIVES
+17:45:38  [wc] send handbackAck path=queued (interactive=true reachable=false)   <- the ACK does not
+17:45:53  [loan] e137 offer RX ev=6 ...                                 <- watch re-offers, 15 s
+17:46:09  [loan] e137 offer RX ev=6 ...
+```
+
+**The direction matters and is easy to get backwards.** Watch → phone WORKS: the phone logs `offer RX`
+once per watch resend. Phone → watch is what fails: the ack queues. From the wrist the two are
+indistinguishable — you send, nothing returns — which is why it reads as "the phone isn't picking it
+up."
+
+**Product consequence, not just a test-rig artifact: any user who reboots their phone during a loan
+hits this.** The hand-back hangs until the registration re-establishes.
+
+### The blast radius is larger than the hand-back
+
+- **Restarting the PHONE app makes the WATCH app quit.** Observed directly. The mechanism is unknown
+  and the link was not previously documented.
+- **The watch app then CRASH-LOOPS on relaunch.**
+
+### RETRACTED: the crash loop is not the debug-dylib split
+
+Earlier the same day, a watch crash loop was diagnosed as Xcode's debug-dylib split (a 92 KB launcher
+stub loading a 6.5 MB `WatchApp.debug.dylib`), and `ENABLE_DEBUG_DYLIB = NO` was set to produce a single
+binary. That fix worked — the build was verified single-binary — **and the crash loop came back anyway
+on that build.** The diagnosis fitted the signature (runs under the debugger, dies standalone,
+TestFlight always fine) and was still wrong, or at best incomplete.
+
+**Better hypothesis, not yet tested: the watch app crash-loops when it restores a WEDGED LOAN STATE.**
+It crashed at 13:00 stuck in "returning records" and again at 17:45 stuck in "ending" — both times
+relaunched into a hand-back that cannot complete. That is a state-driven crash, not a linking one, and
+it predicts the crash follows the loan state rather than the binary layout.
+
+**The way to settle it costs nothing:** a crash log from Devices and Simulators. On a single binary the
+crashing frame points at real code rather than at `dyld`.
+
+### Better experimental rig for the phone-absent arm
+
+Jeremy: turn the phone's radios off but leave the phone ON. Since the registration breaks on the BOOT
+and not on the absence, this should avoid the wedge entirely.
+
+Refinement worth testing: **Bluetooth alone may be enough.** BLE is the BT radio, so BT-off removes the
+phone as a pod competitor, while WCSession can fall back to Wi-Fi when both devices share a network —
+keeping the ack path and the log mirror alive. If WCSession dies with BT off, that is a one-minute
+finding and the fallback is the full radios-off version.
