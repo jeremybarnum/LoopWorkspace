@@ -146,3 +146,42 @@ regime we are in.
 
 **Revisit after:** the phone-on arm is re-measured post-fix. If ladders are genuinely fast with the
 phone on too, the threshold can go up and the state becomes near-invisible in practice.
+
+---
+
+## 9. The glance shows BG without a trend arrow
+
+**Seen:** 2026-08-19 17:09, Jeremy: the stock watch screen showed *120, down-45°*; the glance showed
+*120* with no arrow. *"I wonder if we're supposed to add that."*
+
+**Why it matters more than decoration:** the glance is the screen used during a loan, and a number
+without a direction is materially less information at exactly the moment dosing decisions are being
+made. The stock screen already has the trend, so the data is present — it simply is not carried
+through to the glance.
+
+**Cost:** small. The trend accompanies the glucose sample already.
+
+---
+
+## 10. Two prediction surfaces disagree, and neither says it is stale
+
+**Seen:** 2026-08-19 17:07. Glance eventual **202**; diagnostic reconciliation eventual **122**. Same
+loan, same moment.
+
+**Why:** both read `predictedGlucose?.last?.quantity` — the SAME expression
+(`WatchLoopManager:727` and `:1638`). A divergence therefore cannot be a computation difference; one
+surface is rendering a cached snapshot from an earlier cycle and does not mark itself stale.
+
+**Same defect, second face:** the reconciliation's residual `r` is a plug term
+(`eventual − (start + insulin + carb + momentum + RC)`), and its five components come from the effects
+object while `eventual` comes from `predictedGlucose.last`. Different snapshots put their mismatch
+straight into `r` — which is why `r +22` appeared alongside the split. **A non-zero residual is a
+staleness detector.**
+
+**This is not really a nice-to-have.** It is the same class as the IOB/COB split fixed on 2026-08-18,
+and that one was on the dosing path. Unifying the ACCESSOR was not enough; the SNAPSHOT has to be
+unified too. Listed here so it is not lost, but it belongs on the prediction work, not the polish list.
+
+**Related, same sighting:** "recommend" rendered blank — the REC nil window was closed on 2026-08-18 by
+filling the recommendation before installing the context, so either a path was missed or this is a
+different cause.
