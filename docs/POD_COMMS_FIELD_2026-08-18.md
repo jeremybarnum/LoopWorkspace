@@ -133,3 +133,30 @@ The standing rule still holds and this session does not overturn it: **never buy
 reliability with G7 radio time.** The G7 is the glucose source; a pod reclaim that succeeds by
 starving it is a worse system. Any fix here should reduce *our own* contention (the two above)
 or coordinate with the G7's scan cycle — not pre-empt it.
+
+---
+
+## Test-suite flakiness observed the same night (not a pod issue — recorded so it is not lost)
+
+**Two flaky tests in `LoopTests` gated a dosing build tonight, on different runs.**
+
+1. `LoanBooksHarnessTests.testInheritedTempSpanBooksOnBothSides` — genuinely wall-clock-phase
+   dependent: `d5` measured 0.0077, 0.0212 and 0.0277 on consecutive runs of identical code,
+   because the IOB integrals sample on an absolute grid while the test anchored its geometry to an
+   unaligned `Date()`. **Fixed** by pinning `now` to a 5-minute boundary; its threshold had
+   already been tuned once against an integral bound that upstream had since deleted.
+
+2. `PodLoanPhoneControllerTests.testStaleOfferMustNotClampALaterEpochsDosesToItsOwnHandbackTime` —
+   failed once inside the full 97-test gate ("expected a grant, got Optional(…)"), then passed
+   58/58 when its suite ran alone, then the full gate passed on re-run. **Not fixed.** It carries
+   the same two smells: `Date().addingTimeInterval(-.minutes(30))` for its geometry and
+   `wait(for:timeout: 5)` for its synchronisation. A 5-second expectation under a loaded machine
+   is a load-dependent timeout, not a logic assertion.
+
+**Why this matters more than it looks.** A gate that fails intermittently on a build that touches
+dosing is a gate people learn to re-run rather than believe, and that is exactly how a real
+failure gets waved through. Tonight it was re-run and passed — which is the correct outcome and
+also the habit worth not forming.
+
+The fix for (2) is the same as for (1): make it deterministic rather than retry it. Pin the clock,
+and replace the wall-clock expectation with something that does not depend on machine load.
