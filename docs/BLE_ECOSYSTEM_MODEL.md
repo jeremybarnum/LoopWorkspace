@@ -99,11 +99,36 @@ Even `connect()`-and-wait is a scan underneath — bluetoothd listens for that a
 behalf. So *someone* must be listening during the sensor's window, bond or no bond. Knowing the
 schedule does not remove the doorway; it only tells you when to stand in it.
 
-**We know the grid approximately, not exactly.** [MEAS] Our own inter-window gaps are 4m37s and
-4m46s, not 5:00.00 — the sensor keeps its own clock and it drifts against ours, the window is
-short (~10–15 s), and the penalty for missing it is a full 5 minutes. So "connect at the known
-time" really means "open the receiver over a guard band wide enough for mutual drift plus
-jitter." Small, but not zero.
+**The sensor's clock is EXACT. My "drift" claim was wrong — Jeremy challenged it and the
+sensor's own stamps settle it.** [MEAS]
+
+Every `G7GlucoseMessage` carries the sensor's own `sequence` and `messageTimestamp`. Across
+**281 readings** spanning 23.4 hours:
+
+```
+seq 2188  ts 655699   at 2026-08-18 09:21:40
+seq 2469  ts 739999   at 2026-08-19 08:46:39
+
+Δseq = 281 readings
+Δts  = 84300 sensor-seconds  →  300.0000 s per reading, exactly
+Δwall = 84299 s              →  drift +1 s over 23.4 h = 11.9 ppm
+                             →  ~10 s over a 10-day sensor life
+```
+
+So the grid is exact to a part in 84,000, and the ~10 s of lifetime drift could as easily be
+OUR clock as the sensor's. Jeremy's hypothesis — "a solid internal clock, a few seconds over ten
+days, predictable within seconds" — is confirmed. There is no cumulative drift to guard against.
+
+**What DOES vary is the per-window jitter, and it is the real constraint.** Consecutive stamp
+deltas run 300, 299, 302, 298, **310, 293** — so an individual window can land ±10 s off the
+grid even though the long-run rate is exact. The 4m37s / 4m46s discovery gaps I cited as
+evidence of drift were nothing of the kind: they are *discovery* jitter — when in an open window
+our scan happened to catch the advert — sitting on top of a perfectly stable grid.
+
+**Consequence for the design: the guard band is set by window jitter (~±10 s), not by drift.**
+Something like a 20–30 s arm around the predicted instant, re-anchored on every reading, is
+enough — tighter than crude's 45 s, and an order of magnitude tighter than the ~270 s we scan
+today. And because the grid never slips, one good reading re-anchors the whole schedule.
 
 **The guard band CAN be small, and crude proved it.** [MEAS] That is exactly crude's recipe —
 "scan is the primitive, fresh lead-time arming, 300−45 geometry": arm ~45 s before the predicted
@@ -123,16 +148,18 @@ relaunch and as insurance when the Dexcom app misses a window.
 **So the preference ordering should be: connection events first, guard-band scheduled scan
 second, continuous scan never.**
 
+*JB - okay this is important stuff, but it strikes me that b is very good and powerful and we should have a strong bias for using it.  And probably instrument things to reflect that bias rather than a big fallback tree that means we dno't actually know what's happening.  Mabe that's already true.  * 
+
 **Important caveat, or this becomes the fourth wrong theory:** shrinking the G7 scan is a real
 win in receiver time and coexistence pressure, but it probably does **not** touch the Code=11
 disease. Code=11 is a *connection-table* error and **a scan holds no table entry**. If we fixed
 only the scan and left the intent churn alone, the expectation is that the lockups continue.
-Scan geometry and intent hygiene are separate problems that happen to share a symptom.
+Scan geometry and intent hygiene are separate problems that happen to share a symptom. *JB understood.  Let me read to the end, but I have some questions about Code = 11*
 
 **[Jeremy/ground-truth]** The sensor accepts up to **three** collectors. On the watch during a
 window, plausibly two of those are in play: the Dexcom watch app's own link and ours (the
 "piggyback"). Whether the sensor serves collectors simultaneously or sequentially within one
-window: [UNK], and it matters for worst-case window timing.
+window: [UNK], and it matters for worst-case window timing. **JB good point about that.  I could probably do an experiment by staring at the D2W app in the watch and noting when it updates.  Important to note - the statement of 2 connectors is true when the phone is off.  WHen it's on, we're using all 3 - phone, D2W, Sport mode.  I think, I'm not sure*
 
 **The 2026-08-19 "53-minute outage" is UNVERIFIED as a sensor fact.** `g7direct=3207s` says OUR
 direct link was absent; phone-relay readings kept arriving throughout, and the D2W control —
@@ -153,12 +180,14 @@ continuously, and the pod's whole protocol assumes an owner. When unconnected:
   connectable the whole time. The watch was the sick party.** [MEAS — this is the single most
   diagnostic fact of the whole investigation]
 
+**JB OKay, but I have a question - am I right that next dev switched from standing connection to on demand? do we know why? notably, pods running out of battery are not a thing.  But, there is some work going on for the next omnipod product**
+
 ## 2.3 The watch
 
 One BLE radio time-sliced among: the phone link, AirPods (Classic — heavy when streaming), the
-system's own Dexcom bond, the Dexcom watch app's G7 link, **our G7 central**, and **our pod
+system's own Dexcom bond, the Dexcom watch app's G7 link, **our G7 central**, **JB wait, this feels like too mnay.  What's "the systems onwn decome bond as opposed to teh decom watch's app G7 link"? and what is the difference betwene "our G7 central" as opposed to sport mode's G7 connection.  Maybe its' the same ** and **our pod
 central(s)** — plural, because `escalateLoanReclaim` recreates the pod central by design. Every
-one of these except AirPods draws on the same LE connection table.
+one of these except AirPods draws on the same LE connection table.  **JB I sknow you're implicitly already suggesting this, but having multiple pod centrals seems bad and possibly unnecessary.  We hsouold understand this better.**
 
 **[MEAS]** The failure mode is watch-local and cumulative: early-session reclaims succeed,
 late-session ones fail 9/9, the G7 gets refused too, and only a table reset (BT toggle)
@@ -186,13 +215,13 @@ code says so — and the held-link evidence (1.2) says a standing pod link is ch
 E4 generates ~12 acquisition attempts/hour, each one scanning, each one issuing intents, each
 one a chance to feed the table. **The policy built to protect the G7 is now the main producer
 of the traffic that locks the G7 out.** [HYP for the causal link — the intent ledger is the
-test — but every component of it is individually [MEAS].]
+test — but every component of it is individually [MEAS].] **JB okay got it, but i think "chance to feed the table" is soemting to explore further**
 
 ---
 
 # Part 4 — The contention model, stated as claims
 
-1. **[MEAS]** Steady-state coexistence is fine: held pod link + G7 window worked for 263 cycles.
+1. **[MEAS]** Steady-state coexistence is fine: held pod link + G7 window worked for 263 cycles.  **JB okay, but do we know how thsi changes if we're using mode b**
 2. **[MEAS]** The scarce resource is the connection table, not airtime: Code=11 hits both
    stacks at once and a table reset fixes both at once.
 3. **[HYP → instrumented]** The table fills because acquisition churn leaks pending intents —
@@ -235,6 +264,9 @@ should not have written "accumulates" without noticing that.
 **[UNK] and worth asking Jeremy:** was Low Power Mode on during the 08-19 session? watchOS
 prompts at 10%. If it was, that session is not comparable to the others at all.
 
+
+**JB okay, I'm structrually skeptical of battery explanations. I find it plausible that low power mode changes behavior.  I find it plausible that even with low power mode off, at the lowest levels of battery, some behavrior changes.  I don't find it plausible that between 85 and 65%, behavior changes.  We should instrument whether low power mode is on.  **
+
 **Consequence for the intent ledger:** it still discriminates. If ORPHANED climbs at 95% battery
 in a session where reclaims fail, the leak is real and battery-independent. If ORPHANED stays
 flat and failures track battery only, the leak theory dies. Record the battery with every field
@@ -264,6 +296,8 @@ If installs become reliably fast, our own radio behaviour is starving the channe
 us — which would be a satisfying irony and an argument for the scan-geometry work in its own
 right. Prediction stated in advance so it can fail.
 
+**JB okay this is interesting, but in general, I hvaen't been installing while also trying to run sport mode, so i'm confused about this** 
+
 **Dead theory, recorded so it is not retried:** I suggested the pinned `CURRENT_PROJECT_VERSION`
 (58) might make watchOS refuse a same-version replacement. **Wrong.** TestFlight builds carry
 ASC-assigned numbers (109, 111, 112, 113 all observed on the wrist) and `install-pair` assigns its
@@ -277,14 +311,14 @@ there is no collision to refuse.
 1. **Hold the pod link for the life of a loan.** One acquisition per loan instead of ~12/hour.
    Cheap while held (1.2), removes the churn that feeds the table, removes the 28 s ladders,
    removes the frozen glance. Touches R31 and "G7 connectivity outranks takeover" — Jeremy's
-   call, and the intent-ledger data should arrive first.
+   call, and the intent-ledger data should arrive first.  **JB I'm okay overruling my rulings here to test the hypothesis that G7 connection is unaffected by pod status.  We need to do that controlled experiment.  Maybe we should add modes to the diagnostic screen.  **
 2. **Intent hygiene regardless:** cancel every pending connect before dropping a central;
-   audit connectOnDemand's fallback the same way. Correct under any theory.
+   audit connectOnDemand's fallback the same way. Correct under any theory. **JB okay did we do this already or no?**
 3. **If acquisition must stay reactive anywhere, schedule it** in the G7's quiet 4½ minutes —
-   crude's transferable lesson — rather than colliding with windows blindly.
+   crude's transferable lesson — rather than colliding with windows blindly. **JB yes, no blind collision.  But let's not do this unless we have to. Maybe we'll have a much more elegant solution based on what we've learned** 
 4. **Re-order the G7's doorways: connection events, then a guard-band scan, never continuous**
    (2.1a). Frees ~3½ minutes of receiver time per cycle for pod acquisition. Ranked BELOW 1 and 2
    deliberately: it addresses airtime, and the measured disease is table exhaustion. Worth doing
-   on its own merits; not to be mistaken for the cure.
+   on its own merits; not to be mistaken for the cure. **JB yeah, I think you're giving me too much deference here.  I think we need to push through with experiements to determine what is actually true aboht contention, tables, etc, and then code accoridngly.  We're close.** 
 5. **Re-verify the "outage"** with the new instrumentation AND the D2W control before treating
-   any G7 gap as a sensor fact.
+   any G7 gap as a sensor fact.  **JB.  Sure.  Low priority**.
