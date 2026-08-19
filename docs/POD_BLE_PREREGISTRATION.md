@@ -99,6 +99,22 @@ If H7 holds, the fix is a longer or advert-driven ladder, not more machinery.
 
 ---
 
+## Run protocol — conditions that invalidate a run
+
+- **No builds during a loan.** Installing replaces the watch app and kills it mid-loan; the phone then
+  reclaims via the dead-man path. That is a different experiment (and on 2026-08-19 it completed in
+  ~30 s from cold, which is the dead-man working), but it is not the one being run, and any ladder
+  data after it belongs to a killed process.
+- **`appInstalled=true` on the phone before starting**, or ack delivery queues and the hand-back wedges
+  on "returning records" regardless of anything under test.
+- **Note loan start and end times.** Ladder numbering restarts per epoch; without boundaries the
+  early-vs-late arc cannot be read.
+- **Record whether the phone is on or off**, since it changes the sensor's collector count (3 vs 2) and
+  removes the phone as a competitor for the pod at the same time — two variables, always moving
+  together.
+
+---
+
 ## How the framework has evolved
 
 1. **Airtime → connection table.** H1 assumed the radio was the scarce thing. It is not; an established
