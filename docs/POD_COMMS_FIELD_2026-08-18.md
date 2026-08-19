@@ -127,6 +127,62 @@ repaint while the radio is busy is a display that fails exactly when it is being
 
 ---
 
+## 2026-08-19 UPDATE — the actual error, and the emergency procedure
+
+### `CBErrorDomain Code=11` — the mechanism, captured at last
+
+Build 113's instrumentation caught the real failure:
+
+```
+07:31:43.284  [connectOnDemand] pod heard -> connecting on fresh advert
+07:31:43.285  [loan-scan] marker 0x177e6b7e -> nil (adopted)
+07:31:43.294  Pod failed to connect … CBErrorDomain Code=11
+              "The system has reached the maximum number of connections"
+```
+
+**It is BLE connection-SLOT exhaustion, not scan contention.** The G7 connected at 07:31:39 and
+held its link to 07:31:48; the pod's connect landed at 07:31:43, inside that window, and watchOS
+refused it.
+
+This supersedes the 2026-08-18 headline above, which blamed the G7's near-continuous *scanning*.
+Scanning is cheap. The scarce resource is the connection. The same data reads better under the new
+mechanism: the two reclaims that succeeded (L8, L9) had the G7 quiet for 269 s and 300 s — i.e. no
+G7 *connection* held — and every failure coincided with G7 link activity or an unestablished G7
+still trying.
+
+It also matches the standing note that watch-side `CBErrorDomain#11` on takeover "is OURS, not the
+pod or phone."
+
+### THE EMERGENCY PROCEDURE: toggle Bluetooth
+
+**Field-proven 2026-08-19.** With the pod unreachable from both devices after a hand-back — phone
+pill showing signal loss, settle unable to verify — **toggling Bluetooth off and on returned the
+pod to the phone.**
+
+This is not folk remedy; it fits the diagnosis exactly. A BT toggle tears down the system's
+connection table, which is precisely the resource `Code=11` says is exhausted. **The remedy fitting
+the mechanism is corroborating evidence for the mechanism.**
+
+Worth surfacing to users if edge cases persist — and arguably worth putting in the stuck-settle
+alert text itself, since it is a one-tap recovery for a state that otherwise looks like a lost pod.
+
+### The scan marker clears too early — a real, fixable bug
+
+`[loan-scan] marker … -> nil (adopted)` fires on *hearing a matching advertisement*, one
+millisecond before the connect fails. The ladder then polls on for 20+ seconds with no scan armed
+and no marker, leaving `connectOnDemand` free to do as it likes.
+
+**The marker should clear on a CONFIRMED connection, not on an advert sighting.** That is the next
+fix, and unlike the G7 question it is entirely ours and carries no radio-budget tradeoff.
+
+### Both 2026-08-18 fixes verified working
+
+- Coalescing: `JOINING L3 (in flight 0.0s) — 1 waiter(s)` … `L3 answering 1 joined caller(s)`.
+- Wrist override reaching dosing: `Jogging · insulin needs 21% (basal x0.21, ISF x4.76, CR x4.76)`
+  with `[dosemath] scheduled 0.27 · target 150-170` confirming it reached the dose.
+
+---
+
 ## What NOT to do
 
 The standing rule still holds and this session does not overturn it: **never buy takeover
