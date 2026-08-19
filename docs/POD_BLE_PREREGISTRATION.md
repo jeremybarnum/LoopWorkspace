@@ -115,6 +115,41 @@ If H7 holds, the fix is a longer or advert-driven ladder, not more machinery.
 
 ---
 
+## Settled 2026-08-19 16:23 — what `appInstalled` actually tracks
+
+Not a pod theory, but it gates every run, and a wrong story about it cost most of an afternoon.
+
+**The transition, caught the first time the instrument existed:**
+
+```
+16:23:28.168  ** WATCH STATE CHANGED ** paired=true appInstalled=true reachable=true activation=2 complication=true
+```
+
+**`WCSession.isWatchAppInstalled` is SYSTEM state, not app state.** It reads false while a freshly
+installed watch app is not yet registered as the companion, and true once registration completes. The
+phone app only needs to be RUNNING to observe it.
+
+Two things that were believed and are wrong:
+
+- **"Install order determines it."** Proposed on a single 13:41:42 observation (watch install, then
+  phone install → true). Refuted the same afternoon: the same order produced `false` at 16:18, and the
+  eventual flip at 16:23:28 came with the opposite order. Ordering matters only in that the phone app
+  must be running to see the change.
+- **"Force-quitting the apps will resolve it."** It cannot. Both apps were force-quit and reopened at
+  ~16:19 with no effect, because the flag is not owned by either app.
+
+**Why it gates the experiment:** with `appInstalled=false`, WCSession QUEUES every message instead of
+delivering it. The hand-back ack never lands, so the watch spins on "returning records" forever while
+the phone has already taken the pod back in a second. Any ladder data from such a run is measuring a
+broken transport, not the radio. Hence the protocol precondition above.
+
+**The lesson that generalises:** a level sampled every 60 s cannot be attributed to an event. The
+delegate callback that fires ON the change existed in WCSessionDelegate the whole time and was simply
+not implemented. Before theorising about what causes a flag to change, check whether the platform will
+just tell you.
+
+---
+
 ## How the framework has evolved
 
 1. **Airtime → connection table.** H1 assumed the radio was the scarce thing. It is not; an established
