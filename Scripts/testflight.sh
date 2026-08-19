@@ -44,7 +44,13 @@ ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
 [[ -f "$ASC_KEY_PATH" ]] || { echo "ASC API key missing: $ASC_KEY_PATH"; exit 64; }
 
 ROOT="${0:A:h:h}"                      # superproject root (this file is in Scripts/)
-BASE="${ROOT:h}"                       # the March2026 directory
+# TREE-SCOPED and OUTSIDE the repo (a sibling of the tree, named after it). This used to be "${ROOT:h}" — the parent directory — which was
+# unique per clone under the old layout but is now shared by EVERY worktree under trees/.
+# port-nextdev, bench and sportmode-verify all resolved to the same .dd-sim, so a gate run here
+# could install products another branch had built: "App installation failed: Unable to Install
+# Loop", with no assertion failures, which reads as a broken branch. Two builds cannot share one
+# derivedDataPath.
+BASE="${ROOT:h}/.gate-${ROOT:t}"
 DD="$BASE/.dd-nextdev-archive"         # isolated Release DerivedData (CLAUDE.md rule)
 OUT="$BASE/TestFlight-nextdev"         # apart from the fork's archives: two streams ship in parallel
 STAMP="$(date +%Y%m%d-%H%M%S)"
