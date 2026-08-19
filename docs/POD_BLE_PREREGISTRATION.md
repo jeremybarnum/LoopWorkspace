@@ -43,6 +43,7 @@ pod visibility".** H4/H5/H6 below are attempts to find out which.
 | H2 | Leaked connect intents (`recreateCentral`) exhaust the connection table | count ORPHANED; see whether Code=11 tracks it | **DEAD** — ORPHANED=1 across SUCCESSFUL connects; e132 had a refusal at ORPHANED=0 |
 | H3 | Two of our own connect paths race and CoreBluetooth refuses the duplicate | do refusals coincide with two `connect via` lines in one millisecond? | **SUPPORTED, n=2** — but see H4: it happens inside ladders that SUCCEED |
 | H4 | The dominant failure is DISCOVERY, not connection | classify every ladder by connects issued | **CONFIRMED** — 8/8 failed ladders heard `adverts=0 last=never` |
+| H6 | watchOS throttles our scan when backgrounded | count APP BACKGROUND, not time-since-APP-FOREGROUND | **DEAD** — 0 background events during the entire ladder window; there were no background ladders |
 | H5 | The pod is invisible because something still holds it | advert census + the phone's own intent ledger | **CONFIRMED — it is the PHONE**, connecting every 2–3 min while `released=true`, every connect succeeding |
 
 H3 is real and fixed. **H4 is why fixing H3 will not fix the reclaim failures**, and saying so plainly
@@ -118,7 +119,40 @@ census showing `released=true` with no link throughout a failed ladder.
 during a takeover the watch was failing — a cold Omnipod connect takes ~17 s, so the link was already
 up. How it got there is unrecorded. That is the hole the census fills.
 
-### H6 — watchOS throttles our scan when the app is not foreground
+### H6 — DEAD 2026-08-19. There were never any background ladders; the correlation was a measurement error.
+
+**Jeremy killed this by challenging the premise:** *"forget about foregrounding the app. You're obsessed
+with that. For the vast majority of this time I'm wrist up staring at the watch. And also, the workout
+keepalive de facto foregrounds, right?"* Both halves correct.
+
+**The measurement error.** `APP FOREGROUND` fires on `WKApplication.didBecomeActiveNotification` — a
+TRANSITION, not a state sample. The analysis measured *time since the last foreground transition* and
+read a long gap as "the app was backgrounded." If the app never leaves, there is no new transition, and
+the gap means the OPPOSITE. The correct instrument, `APP BACKGROUND` on `didEnterBackgroundNotification`,
+was logged right beside it and went unused.
+
+**The data, once the right field was counted:** [MEAS]
+
+| | count |
+|---|---|
+| `APP FOREGROUND` in the log | 50 |
+| `APP BACKGROUND` in the log | **2** |
+| `APP BACKGROUND` during the entire e132 ladder window (14:16–14:43) | **0** |
+
+Every ladder classified as "background" was foreground. The 5/5-successes-had-recent-foreground vs
+4/5-failures-did-not pattern was an artifact of comparing transition timestamps, not app states.
+
+**Mechanism for why it barely exists in practice:** the loan holds an `HKWorkoutSession` keepalive
+(`[keepalive] HKWorkoutSession(.other) started — background runtime ACTIVE`), which keeps the app
+running, and the user is wrist-up watching the screen for most of a loan anyway.
+
+**Kept as a lesson, not just a dead hypothesis:** two adjacent log fields, one of which answers the
+question directly, and the analysis used the one that only looks like it does. Before correlating
+against a derived quantity (time-since-event), check whether the state itself is logged.
+
+---
+
+### H6 (original statement, kept for the record) — watchOS throttles our scan when the app is not foreground
 
 **Claim.** Background BLE scanning on watchOS delivers advertisements slowly or not at all, so ladders
 that run while the user is not looking hear nothing.
