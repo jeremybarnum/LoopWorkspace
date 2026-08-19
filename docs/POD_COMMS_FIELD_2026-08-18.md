@@ -244,3 +244,60 @@ also the habit worth not forming.
 
 The fix for (2) is the same as for (1): make it deterministic rather than retry it. Pin the clock,
 and replace the wall-clock expectation with something that does not depend on machine load.
+
+
+---
+
+## 2026-08-19 AFTERNOON — the ledger reported, and it killed the headline theory
+
+**This supersedes both the 2026-08-18 headline (G7 scanning) and the 2026-08-19 morning update
+(connection-slot exhaustion via leaked intents). Read this first.**
+
+Loan e131, first build carrying the connect-intent ledger. **One `Code=11` in six issued intents.**
+
+```
+12:56:51.686  g7-ble didDisconnect DXCMqL             <- G7 released 2.3 s BEFORE
+12:56:53.974  [intent] connect via timedConnect  -> open=1 issued=5
+12:56:53.974  [intent] connect via adopt-retry   -> open=1 issued=5   <- SAME MILLISECOND
+12:56:53.982  [intent] refused
+12:56:53.983  CBErrorDomain Code=11
+12:56:54.733  [intent] connect via timedConnect  -> open=1 issued=6   <- single connect
+12:56:55.996  [intent] resolved                                       <- SUCCEEDS 0.75 s later
+```
+
+### DEAD — do not revive without new evidence
+
+- **The `recreateCentral` orphan is not a leak.** `ORPHANED=1` was set at 12:53:29 and stood for the
+  rest of the session, *including across connects that succeeded* at 12:53:31 and 12:56:55. The
+  cancel-before-drop fix this document proposed would have changed nothing.
+- **G7 contention did not cause this refusal.** The G7 had disconnected 2.3 s earlier.
+
+### What survives
+
+Two candidates, inseparable at n=1: our own **duplicate connect** (two paths, same peripheral, same
+millisecond), and **watchOS releasing a slot lazily** (2.3 s too soon, 3.0 s enough).
+
+**Fix shipped 2026-08-19:** `noteConnectIssued` returns a verdict; callers skip `connect()` when one is
+already in flight, counted as `suppressed=N`. Guards `.connecting` only — never `.connected`, because
+that re-delivers `didConnect` and this file compiles into the phone as well as the watch.
+
+If `suppressed` climbs while reclaims still fail, the duplicate was not the disease and lazy release is.
+
+### The finding that invalidated most of the session: `appInstalled=false`
+
+The hand-back **succeeded** — phone committed, took ownership, verified a pod round-trip in 1 s. But
+the watch spun on "returning records" until it died, because every ack was queued, not delivered:
+
+```
+[wc] send handbackAck path=queued (interactive=true reachable=false)
+[link] watch reachable=false paired=true appInstalled=false
+```
+
+19 acks queued vs 14 live. `WCSession.isWatchAppInstalled` was false — flapping all day in lockstep
+with the install churn — so nothing reached the watch and it re-offered forever.
+
+Two consequences: **a direct Xcode/devicectl watch install can leave the phone's companion
+registration wrong, and hand-back depends on it** (local installs are not a clean test bed until
+`appInstalled=true` is confirmed); and **the watch has no ceiling on the returning-records state**, so
+it spins indefinitely when the phone already owns the pod. Nothing is at risk when that happens — but
+it looks exactly like the state where something is.

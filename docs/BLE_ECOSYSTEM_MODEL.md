@@ -1,6 +1,12 @@
 # The BLE ecosystem — what is physically true, what we designed, what we know
 
-**Status: DRAFT for Jeremy's markup, 2026-08-19.** The step-back document: one model of the
+**Status: REVISED 2026-08-19 (afternoon), after Jeremy's markup AND after the connect-intent ledger
+reported from the field.** Read Part 4 first: it is the measured part, and it kills two hypotheses the
+earlier parts of this document argue for. Parts 1–3 are background and are still sound; where they
+conflict with Part 4, Part 4 wins. Jeremy's inline `JB` comments are answered in `>` blocks beneath
+them; his challenge on the sensor clock (2.1a) was correct and that section is rewritten.
+
+The step-back document: one model of the
 radio ecosystem, stated plainly enough to be wrong in public, with every claim graded. Scope is
 the STANDALONE WATCH ecosystem — watch radio, G7 sensor, pod. The phone's radio matters only at
 grant/hand-back boundaries and is deliberately out of scope here.
@@ -150,6 +156,13 @@ second, continuous scan never.**
 
 *JB - okay this is important stuff, but it strikes me that b is very good and powerful and we should have a strong bias for using it.  And probably instrument things to reflect that bias rather than a big fallback tree that means we dno't actually know what's happening.  Mabe that's already true.  * 
 
+> **Answered.** Agreed, and (b) is now the design bias, not a fallback. Two reasons it is stronger
+> than I first wrote it: it costs no receiver time at all (the OS tells us), and Jeremy's clock
+> finding means one reading anchors the whole future grid, so (b) plus a narrow guard band is
+> sufficient — the fallback tree exists only for the first acquisition after launch. The instrumenting
+> point is taken: the census should report WHICH doorway produced each reading, so the bias is
+> visible in the data rather than asserted here.
+
 **Important caveat, or this becomes the fourth wrong theory:** shrinking the G7 scan is a real
 win in receiver time and coexistence pressure, but it probably does **not** touch the Code=11
 disease. Code=11 is a *connection-table* error and **a scan holds no table entry**. If we fixed
@@ -160,6 +173,16 @@ Scan geometry and intent hygiene are separate problems that happen to share a sy
 window, plausibly two of those are in play: the Dexcom watch app's own link and ours (the
 "piggyback"). Whether the sensor serves collectors simultaneously or sequentially within one
 window: [UNK], and it matters for worst-case window timing. **JB good point about that.  I could probably do an experiment by staring at the D2W app in the watch and noting when it updates.  Important to note - the statement of 2 connectors is true when the phone is off.  WHen it's on, we're using all 3 - phone, D2W, Sport mode.  I think, I'm not sure*
+
+> **Answered.** The D2W-staring experiment would work, and there is a cheaper version: we already log
+> `connection-event CONNECT DXCMqL` every time the OS sees D2W connect, so D2W's rhythm is already in
+> our logs without anyone watching a screen. Worth extracting rather than observing.
+>
+> Jeremy's correction on collector count is important and is now carried into 4.0: **2 collectors is
+> the phone-OFF case; with the phone on it is phone + D2W + Sport Mode = 3**, which is exactly the
+> documented sensor limit. That is a different ceiling from the watch-side `Code=11` one — sensor-side
+> (peripheral refuses) versus watch-side (our own connection table). Both are real; they are not the
+> same constraint, and conflating them cost us a day.
 
 **The 2026-08-19 "53-minute outage" is UNVERIFIED as a sensor fact.** `g7direct=3207s` says OUR
 direct link was absent; phone-relay readings kept arriving throughout, and the D2W control —
@@ -182,12 +205,40 @@ continuously, and the pod's whole protocol assumes an owner. When unconnected:
 
 **JB OKay, but I have a question - am I right that next dev switched from standing connection to on demand? do we know why? notably, pods running out of battery are not a thing.  But, there is some work going on for the next omnipod product**
 
+> **Answered — and the "why" is unflattering.** Yes: next-dev runs connect-on-demand
+> (`BluetoothManager.connectOnDemandEnabled`), where the pod is left disconnected between commands and
+> observed via advertisements. The justification in the code is radio economy — not holding a link the
+> pod does not need. Jeremy's point that pod battery is not a constraint removes the strongest reason
+> for it, and 1.2 says a held link is nearly free anyway. So on-demand is buying us very little and
+> costing us ~12 acquisitions/hour, each of which is a chance to hit exactly the race in 4.1.
+> That is why "hold the link for the life of a loan" is item 4 in Part 5. [Design intent read from
+> code + comments, not from a written rationale — no design doc for the switch exists in this tree.]
+
 ## 2.3 The watch
 
-One BLE radio time-sliced among: the phone link, AirPods (Classic — heavy when streaming), the
-system's own Dexcom bond, the Dexcom watch app's G7 link, **our G7 central**, **JB wait, this feels like too mnay.  What's "the systems onwn decome bond as opposed to teh decom watch's app G7 link"? and what is the difference betwene "our G7 central" as opposed to sport mode's G7 connection.  Maybe its' the same ** and **our pod
-central(s)** — plural, because `escalateLoanReclaim` recreates the pod central by design. Every
-one of these except AirPods draws on the same LE connection table.  **JB I sknow you're implicitly already suggesting this, but having multiple pod centrals seems bad and possibly unnecessary.  We hsouold understand this better.**
+**Jeremy was right that the earlier list had too many actors — it double-counted, and here is the
+corrected one.** "The system's own Dexcom bond" and "the Dexcom watch app's G7 link" were the same
+thing seen twice, and "our G7 central" and "Sport Mode's G7 connection" were also the same thing.
+The bond is not a connection at all (1.3): it is stored keys, and it persists whether anything is
+connected or not. What actually occupies the radio and the connection table:
+
+| actor | what it is | counts against our quota? |
+|---|---|---|
+| phone link | the watch↔iPhone pairing | no — system-managed |
+| AirPods | Classic Bluetooth, heavy while streaming | no — different transport, but shares the radio |
+| Dexcom's own watch app (D2W) | a real G7 link, held ~11 s per window | **ambiguous** — per-app quota says no, WorkOutDoors says maybe |
+| **our G7 central** (`G7SensorKit`) | our link to the sensor | **YES** |
+| **our pod central(s)** (`OmnipodKit`) | our link to the pod | **YES** |
+
+The last two are in one process and are the whole of our budget (4.0).
+
+**On "multiple pod centrals seems bad and possibly unnecessary" — agreed, and it is now also
+pointless.** `escalateLoanReclaim` recreates the pod central by design, on the theory that dropping
+it clears a stalled pending connect. The ledger tested that theory and killed it (4.1): orphaned
+intents did not hold slots, and connects succeeded with an orphan standing. So the central rebuild is
+buying nothing we can measure while adding a class of state we cannot reason about. It should be
+reconsidered — not as a slot fix, which it is not, but on the grounds that it was justified by a
+belief that turned out to be false.
 
 **[MEAS]** The failure mode is watch-local and cumulative: early-session reclaims succeed,
 late-session ones fail 9/9, the G7 gets refused too, and only a table reset (BT toggle)
@@ -217,28 +268,153 @@ one a chance to feed the table. **The policy built to protect the G7 is now the 
 of the traffic that locks the G7 out.** [HYP for the causal link — the intent ledger is the
 test — but every component of it is individually [MEAS].] **JB okay got it, but i think "chance to feed the table" is soemting to explore further**
 
----
-
-# Part 4 — The contention model, stated as claims
-
-1. **[MEAS]** Steady-state coexistence is fine: held pod link + G7 window worked for 263 cycles.  **JB okay, but do we know how thsi changes if we're using mode b**
-2. **[MEAS]** The scarce resource is the connection table, not airtime: Code=11 hits both
-   stacks at once and a table reset fixes both at once.
-3. **[HYP → instrumented]** The table fills because acquisition churn leaks pending intents —
-   `recreateCentral` drops centrals that have open connects, `connectOnDemand` adds more, and
-   nothing cancels them. The ledger's ORPHANED counter is the direct test. Corroborating
-   precedent: the old field note "G7 pending connect eats a BLE slot; takeover CBErrorDomain#11
-   is OURS" — same error, same mechanism family, seen from the other side.
-4. **[MEAS]** Failed acquisition is also a UI outage: a 28 s ladder holds the loan controller's
-   serial queue, which the glance ticks on.
-5. **[UNK]** The actual table size, per-app vs per-device accounting, and whether watchOS
-   reclaims abandoned intents on client death. These decide how aggressive the fix must be.
+> **Answered.** Worth exploring, but the phrase has to be retired: "chance to feed the table" assumed
+> the table fills from our leaked intents, and 4.1 killed that. What survives is narrower and still
+> real — **each acquisition is a chance for two of our own connect paths to collide**, which is a race,
+> not an accumulation. The distinction matters for the fix: a race is fixed by mutual exclusion (done),
+> an accumulation would be fixed by hygiene (item 2, now downgraded).
 
 ---
 
-# Part 4 — Two confounders found while writing this, both weakening claims above
+# Part 4 — RESOLVED: the anatomy of a Code=11, measured
 
-## 4.1 BATTERY. The "it accumulates within a session" evidence is confounded.
+**Everything below Part 4 was rewritten on 2026-08-19 after the connect-intent ledger reported from
+the field. Two hypotheses I argued hard for are dead. Read this before the older reasoning.**
+
+## 4.0 The ceiling is TWO, and it is documented — the number I had been treating as unknown
+
+Jeremy's research (2026-08-19) settled the question I had left open:
+
+- `CBErrorDomain Code=11` is `CBError.connectionLimitReached` — "the device already has the maximum
+  number of connections." Unambiguous once the DOMAIN is included; bare "code 11" is meaningless,
+  since HCI `0x09`, HCI `0x0B`, ATT `0x11` and `CBATTErrorDomain 11` are all different things.
+- **Apple documents the watchOS third-party ceiling as two simultaneous connections** — WWDC17
+  ("Limited to 2 simultaneous connections") and WWDC22 ("a limit of two Bluetooth connections for
+  each app"). Nothing public raises it for watchOS 26 or the SE 3.
+- What remains genuinely undocumented is the SE 3 controller's total capacity and how watchOS
+  splits it between apps and system services. Per-app vs shared-across-third-party-apps is
+  inconsistent in the public record (Apple says per app; WorkOutDoors reports two across all).
+
+**The structural consequence, which was never written down before.** The watch extension embeds two
+BLE stacks that hold connections — `G7SensorKit` and `OmnipodKit` — in ONE process, and the research's
+own guidance is to assume every `CBCentralManager` in a process shares the quota. So:
+
+| slot | holder |
+|---|---|
+| 1 | G7 sensor |
+| 2 | pod |
+
+**We designed a system that runs permanently at 100% of its connection budget with zero headroom.**
+That is not a tuning problem. It is the shape of the thing.
+
+Note also that the per-app-vs-shared ambiguity barely affects our own diagnosis — both our stacks are
+in our process either way. What it decides is whether **D2W competes with us at all**. If Apple's
+"two for each app" is right, it does not, and a good deal of the reasoning in Part 2 (and the standing
+"never buy takeover reliability with G7 radio time" rule) is aimed at the wrong target.
+
+## 4.1 The one Code=11 we have fully instrumented — and what it killed
+
+Field 2026-08-19, loan e131, build with the connect-intent ledger. **One refusal in six issued
+intents across the session.** [MEAS]
+
+```
+12:56:51.686  g7-ble didDisconnect DXCMqL              <- G7 releases, 2.3 s BEFORE
+12:56:53.786  g7-ble scan-start: KNOWN peripheral state=0
+12:56:53.974  [intent] connect via timedConnect  -> open=1 issued=5
+12:56:53.974  [intent] connect via adopt-retry   -> open=1 issued=5   <- SAME MILLISECOND
+12:56:53.982  [intent] refused
+12:56:53.983  Pod failed to connect ... CBErrorDomain Code=11
+12:56:54.733  [intent] connect via timedConnect  -> open=1 issued=6   <- single connect
+12:56:55.996  [intent] resolved                                        <- SUCCEEDS, 0.75 s later
+```
+
+**Two hypotheses died here, both mine:**
+
+1. **`recreateCentral`'s orphaned intent is NOT the leak.** `ORPHANED=1` was set at 12:53:29 and
+   stood for the rest of the session — *including across connects that SUCCEEDED* at 12:53:31 and
+   12:56:55. A standing orphan does not hold a slot. I had called this the prime suspect and
+   proposed cancel-before-drop as the fix; this data says that fix would have changed nothing.
+2. **The G7 was not holding the link.** It had disconnected 2.3 s before the refusal. So this
+   refusal is not G7 contention either — which is how the 2026-08-18 headline read it.
+
+**What is left, and cannot be separated at n=1:**
+
+- **(A) Our own duplicate connect.** Two paths issued `connect()` for the same peripheral in the same
+  millisecond. The research's engineering guidance names this explicitly ("never issue duplicate
+  connect calls for the same peripheral"). G7SensorKit already learned this as the #101 churn fix
+  (`G7BluetoothManager.handleDiscoveredPeripheral` returns early on `.connecting`); the pod path
+  never got the equivalent.
+- **(B) watchOS releasing a slot lazily.** The G7 disconnected 2.3 s before the refusal and the retry
+  succeeded 3.0 s after it. WorkOutDoors reports exactly this — watchOS being slow to release a
+  connection, so the next attempt hits the limit transiently.
+
+The retry succeeding 0.75 s later fits both. **(A) is ours, cheap, and correct under either theory**,
+so it is the fix that went in (2026-08-19): `noteConnectIssued` now returns a verdict and callers skip
+the `connect()` when one is already in flight. Suppressions are COUNTED (`suppressed=N` in the ledger
+line), so if that number climbs while reclaims still fail, (A) was not the disease and (B) is next.
+
+Deliberately NOT guarded: connecting an already-`.connected` peripheral, which makes CoreBluetooth
+re-deliver `didConnect` immediately. Some state machine may lean on that, and this file compiles into
+the PHONE as well as the watch — suppressing it would risk wedging the phone's pod link to fix a
+watch symptom.
+
+## 4.2 The observability trap that distorted the whole session: `appInstalled=false`
+
+Not BLE, but it is the phone↔watch link and it invalidated most of the run, so it belongs here. [MEAS]
+
+The hand-back at 13:01:49 **succeeded** — phone committed, took ownership, and verified a live pod
+round-trip in **one second** (the fastest settle in any log we hold). Yet the watch sat spinning on
+"returning records" until it died, and the phone re-ACKed every 15 s for twenty minutes:
+
+```
+[wc] send handbackAck path=queued bytes=97 (interactive=true reachable=false)
+[link] watch reachable=false activation=2 paired=true appInstalled=false
+```
+
+19 acks queued against 14 delivered live. `WCSession.isWatchAppInstalled` was **false**, so WCSession
+refused live delivery and queued everything; the watch never got the ack, so it never left the
+returning state, so it re-offered — forever.
+
+`appInstalled` flapped all day in lockstep with the install churn: true 12:31–12:36, false 12:40:33,
+true 12:47–12:49, false from 12:50:47 onward, and false for the whole 10:21–12:08 stretch.
+
+**Two consequences.**
+
+- **A direct Xcode/devicectl install to the watch can leave the phone's companion registration wrong,
+  and the loan protocol's ack path depends on that registration.** Local installs are therefore not a
+  clean test bed for hand-back until `appInstalled=true` is confirmed on the phone side.
+- **The watch will spin on "returning records" indefinitely when the phone already owns the pod.**
+  There is no ceiling on that path. It is a real defect independent of the install issue: the watch
+  should give up and say the phone has it. Nothing is at risk when it happens — the pod is home — but
+  it looks exactly like the state where something IS at risk.
+
+## 4.3 The old claim list, scored against the measurement
+
+The five claims this document made before the ledger reported, and what became of each:
+
+| # | claim | verdict |
+|---|---|---|
+| 1 | Steady-state coexistence is fine — held pod link + G7 window, 263 cycles | **STANDS** |
+| 2 | The scarce resource is the connection table, not airtime | **STANDS**, and now has a documented number: two |
+| 3 | The table fills because acquisition churn leaks pending intents (`recreateCentral`) | **DEAD.** ORPHANED=1 stood across successful connects |
+| 4 | Failed acquisition is also a UI outage (28 s ladder holds the glance's queue) | **STANDS**, unaddressed |
+| 5 | Table size / per-app accounting / reclaim-on-death unknown | **PARTLY ANSWERED** — size is 2, accounting still ambiguous |
+
+Claim 3 was the one the whole instrumentation push was built to test, and it failed the test. That is
+the ledger working as designed: it was written to be able to kill its own hypothesis, and it did.
+
+**On claim 1 (Jeremy's question — "does this change if we're using mode b?"):** unknown, and the
+question is sharper than it looks. The 263-cycle census was taken with a HELD pod link. Trigger (b)
+— connection events — changes when *our* connects happen, not how many slots exist, so the ceiling is
+the same. What changes is the odds of two connects overlapping, which is exactly the thing that just
+bit us. Not measured under (b). [UNK]
+
+## 4.4 What the older confounders are worth now
+
+Both were written before the ledger reported. Neither is overturned; both are demoted.
+
+
+### 4.4a BATTERY. The "it accumulates within a session" evidence is confounded.
 
 Battery level per session, from the logs' own `pwr` field:
 
@@ -267,12 +443,19 @@ prompts at 10%. If it was, that session is not comparable to the others at all.
 
 **JB okay, I'm structrually skeptical of battery explanations. I find it plausible that low power mode changes behavior.  I find it plausible that even with low power mode off, at the lowest levels of battery, some behavrior changes.  I don't find it plausible that between 85 and 65%, behavior changes.  We should instrument whether low power mode is on.  **
 
+> **Answered, and you are right — I am withdrawing the battery claim, not defending it.** Re-reading my
+> own table, it never showed a monotonic effect; it showed early-session success and late-session
+> failure, with battery as a passenger. 85% → 65% changing radio behaviour is not plausible and I
+> should not have written it as a confounder worth ranking. Low Power Mode is plausible and is
+> UNINSTRUMENTED, which is the actual gap — Part 5 item 7. Until that ships, battery percentage should
+> not appear in any argument in this document.
+
 **Consequence for the intent ledger:** it still discriminates. If ORPHANED climbs at 95% battery
 in a session where reclaims fail, the leak is real and battery-independent. If ORPHANED stays
 flat and failures track battery only, the leak theory dies. Record the battery with every field
 session from now on — it is already in the log, we simply were not reading it.
 
-## 4.2 The watch-app INSTALL is probably competing with our own radio use
+### 4.4b The watch-app INSTALL is probably competing with our own radio use
 
 Jeremy's three observations (2026-08-19): (1) the app finished installing on the watch **while
 the phone's Watch app was still spinning**; (2) after deleting, an install took forever; (3)
@@ -298,6 +481,13 @@ right. Prediction stated in advance so it can fail.
 
 **JB okay this is interesting, but in general, I hvaen't been installing while also trying to run sport mode, so i'm confused about this** 
 
+> **Answered — this section is now mostly WRONG and is kept only for the record.** Jeremy: he has not
+> been installing while running Sport Mode, which removes the premise. And 4.2 supplies the real
+> mechanism: installs disturb `WCSession.isWatchAppInstalled`, which breaks the phone↔watch ACK path.
+> The install interferes with the **companion registration**, not with the BLE radio. Same symptom
+> (things stop working around installs), completely different cause, and the radio-contention story
+> sent us looking in the wrong layer.
+
 **Dead theory, recorded so it is not retried:** I suggested the pinned `CURRENT_PROJECT_VERSION`
 (58) might make watchOS refuse a same-version replacement. **Wrong.** TestFlight builds carry
 ASC-assigned numbers (109, 111, 112, 113 all observed on the wrist) and `install-pair` assigns its
@@ -306,19 +496,45 @@ there is no collision to refuse.
 
 ---
 
-# Part 5 — What the model implies for the next phase (proposals, not decisions)
+# Part 5 — What to do next (rewritten 2026-08-19, after the ledger reported)
 
-1. **Hold the pod link for the life of a loan.** One acquisition per loan instead of ~12/hour.
-   Cheap while held (1.2), removes the churn that feeds the table, removes the 28 s ladders,
-   removes the frozen glance. Touches R31 and "G7 connectivity outranks takeover" — Jeremy's
-   call, and the intent-ledger data should arrive first.  **JB I'm okay overruling my rulings here to test the hypothesis that G7 connection is unaffected by pod status.  We need to do that controlled experiment.  Maybe we should add modes to the diagnostic screen.  **
-2. **Intent hygiene regardless:** cancel every pending connect before dropping a central;
-   audit connectOnDemand's fallback the same way. Correct under any theory. **JB okay did we do this already or no?**
-3. **If acquisition must stay reactive anywhere, schedule it** in the G7's quiet 4½ minutes —
-   crude's transferable lesson — rather than colliding with windows blindly. **JB yes, no blind collision.  But let's not do this unless we have to. Maybe we'll have a much more elegant solution based on what we've learned** 
-4. **Re-order the G7's doorways: connection events, then a guard-band scan, never continuous**
-   (2.1a). Frees ~3½ minutes of receiver time per cycle for pod acquisition. Ranked BELOW 1 and 2
-   deliberately: it addresses airtime, and the measured disease is table exhaustion. Worth doing
-   on its own merits; not to be mistaken for the cure. **JB yeah, I think you're giving me too much deference here.  I think we need to push through with experiements to determine what is actually true aboht contention, tables, etc, and then code accoridngly.  We're close.** 
-5. **Re-verify the "outage"** with the new instrumentation AND the D2W control before treating
-   any G7 gap as a sensor fact.  **JB.  Sure.  Low priority**.
+**Jeremy's steer, taken:** *"I think you're giving me too much deference. We need to push through
+with experiments to determine what is actually true about contention, tables, etc, and then code
+accordingly."* This list is therefore ordered by what each item MEASURES, not by how appealing it is.
+
+1. **DONE 2026-08-19 — kill the duplicate connect.** `noteConnectIssued` returns a verdict; callers
+   skip `connect()` when one is already in flight. Counted as `suppressed=N`, so it reports on
+   itself. Correct under both surviving theories (4.1). Guards `.connecting` only, never
+   `.connected` — this file compiles into the phone too.
+
+2. **NOT DONE, and now DOWNGRADED — intent hygiene (cancel before dropping a central).**
+   Jeremy asked directly whether this was done: **no, only instrumented.** And the instrumentation is
+   the reason not to rush it — ORPHANED=1 stood across successful connects, so the leak this was
+   meant to plug does not exist. Do it as hygiene if the central rebuild survives at all (2.3), not
+   as a fix.
+
+3. **THE EXPERIMENT — does pod activity affect G7 acquisition?** Jeremy has authorised overruling his
+   own rulings to find out ("we need to do that controlled experiment. Maybe we should add modes to
+   the diagnostic screen"). Diagnostic modes are the right shape: pod-hold on/off, G7 trigger (a)/(b),
+   toggled on the wrist, with the census reporting per mode. This is the item that converts standing
+   rules from belief into measurement, and everything below is guesswork until it runs.
+   **Precondition:** `appInstalled=true` on the phone (4.2), or the run is uninterpretable.
+
+4. **Hold the pod link for the life of a loan** — one acquisition per loan instead of ~12/hour. Still
+   the biggest single reduction in churn, and it removes the 28 s ladders and the frozen glance with
+   it. But it is now a HYPOTHESIS ABOUT CHURN, not a fix for table exhaustion, because the table
+   theory died. Sequence it after (3).
+
+5. **Fix the "returning records" wedge** (4.2). Independent of all the above, no radio tradeoff, and
+   it is the failure the user actually sees. The watch must give up when the phone owns the pod.
+
+6. **G7 doorway re-ordering — connection events first, guard-band scan second, never continuous**
+   (2.1a). Jeremy: *"let's not do this unless we have to. Maybe we'll have a much more elegant
+   solution based on what we've learned."* Agreed, and the clock finding (2.1a) is what makes an
+   elegant version possible: the grid is exact, so ONE reading anchors every future window and the
+   only genuinely blind period is the first acquisition after launch. Park until (3) reports.
+
+7. **Instrument Low Power Mode**, and stop invoking battery percentage until it is (4.4a).
+
+8. **Re-verify the "outage"** against the D2W control before treating any G7 gap as a sensor fact.
+   Low priority, per Jeremy.
