@@ -205,6 +205,73 @@ test — but every component of it is individually [MEAS].]
 5. **[UNK]** The actual table size, per-app vs per-device accounting, and whether watchOS
    reclaims abandoned intents on client death. These decide how aggressive the fix must be.
 
+---
+
+# Part 4 — Two confounders found while writing this, both weakening claims above
+
+## 4.1 BATTERY. The "it accumulates within a session" evidence is confounded.
+
+Battery level per session, from the logs' own `pwr` field:
+
+| session | battery | reclaim outcome |
+|---|---|---|
+| 08-18 08:32–10:06 | **95%** | pod reconnect failures at 09:25, 09:33 |
+| 08-18 10:55–13:42 | 75–85% | — |
+| 08-18 14:29–16:31 | 65–70% | reclaim reads failing at 16:27 |
+| 08-18 17:31–22:32 | 55% → **30%** | L2–L7 failed; **L8, L9 succeeded** at 22:31 |
+| 08-19 07:26–08:47 | **10% → 5%** | 9/9 failed; Code=11 on pod **and G7**; 20 min dead |
+
+**The problem for my leak hypothesis: "gets worse across a session" and "battery drains across a
+session" are the same curve.** I cited the within-session degradation as evidence for accumulating
+orphaned intents. It is equally consistent with watchOS tightening radio behaviour as the battery
+falls — and at 5–10% the watch is at or below the Low Power Mode threshold, where BLE background
+work is throttled by policy.
+
+What the table does NOT support is battery as a *sufficient* explanation: reclaims failed at 95%,
+and two succeeded at ~30%. So battery is not the disease either. But the worst episode by far —
+both stacks locked out, twenty minutes dead — is also the lowest-battery episode by far, and I
+should not have written "accumulates" without noticing that.
+
+**[UNK] and worth asking Jeremy:** was Low Power Mode on during the 08-19 session? watchOS
+prompts at 10%. If it was, that session is not comparable to the others at all.
+
+**Consequence for the intent ledger:** it still discriminates. If ORPHANED climbs at 95% battery
+in a session where reclaims fail, the leak is real and battery-independent. If ORPHANED stays
+flat and failures track battery only, the leak theory dies. Record the battery with every field
+session from now on — it is already in the log, we simply were not reading it.
+
+## 4.2 The watch-app INSTALL is probably competing with our own radio use
+
+Jeremy's three observations (2026-08-19): (1) the app finished installing on the watch **while
+the phone's Watch app was still spinning**; (2) after deleting, an install took forever; (3)
+build 113 that morning was fast.
+
+**(1) says the spinner is not a truth source** — the install completed and the progress UI did
+not know. That reframes most "the install is broken" reports as "the progress UI is unreliable",
+which is the same display-vs-truth divergence pattern this project keeps finding elsewhere.
+
+**Theory for (2) vs (3) [HYP].** A watch app arrives by the phone transferring the payload over
+the peer-to-peer link. That transfer is dramatically faster over peer-to-peer Wi-Fi than over
+Bluetooth, and it shares the watch's single radio with **our G7 scan and our pod centrals**. So:
+
+- After a delete, the whole bundle transfers rather than a delta — more bytes over a contended
+  link.
+- While Sport Mode is running, we hold a near-continuous G7 scan (2.1a) plus pod acquisition
+  traffic, which is precisely the load that would starve the transfer.
+
+**The test is cheap and decisive: force-quit the Sport Mode app on the watch before installing.**
+If installs become reliably fast, our own radio behaviour is starving the channel that updates
+us — which would be a satisfying irony and an argument for the scan-geometry work in its own
+right. Prediction stated in advance so it can fail.
+
+**Dead theory, recorded so it is not retried:** I suggested the pinned `CURRENT_PROJECT_VERSION`
+(58) might make watchOS refuse a same-version replacement. **Wrong.** TestFlight builds carry
+ASC-assigned numbers (109, 111, 112, 113 all observed on the wrist) and `install-pair` assigns its
+own incrementing dev series (1001–1008 observed). Both paths produce distinct build numbers, so
+there is no collision to refuse.
+
+---
+
 # Part 5 — What the model implies for the next phase (proposals, not decisions)
 
 1. **Hold the pod link for the life of a loan.** One acquisition per loan instead of ~12/hour.
