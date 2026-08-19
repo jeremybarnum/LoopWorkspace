@@ -276,6 +276,30 @@ is candidate (2).
 **Cheapest next experiment:** a SHORT phone-off — two or three minutes — and time the recovery from the
 moment of power-off. Costs almost nothing and splits the four branches above in a single run.
 
+#### H9a RESULT — 2026-08-19. Recovery is a TIMEOUT, not a re-negotiation. [MEAS]
+
+| event | wall clock | elapsed from power-off | sensor windows |
+|---|---|---|---|
+| phone powered off (disturbance) | 17:01:00 | 0 | 0 |
+| Dexcom reports signal loss | ~17:11 | ~10 min | **2** |
+| Dexcom recovers | 17:25 | **24 min** | **~5** |
+
+**The phone was still off at recovery.** That is the whole result: the outage healed with the proposed
+cause still absent, so healing is NOT triggered by the phone's return. The "recovery timed from
+RESTORATION" branch is dead, and the fixed-timeout branch is supported — pre-registered before the run,
+and it discriminated.
+
+24 minutes against Jeremy's remembered 25–30, from experience across earlier sessions.
+
+**Everything is quantized to the sensor's 5-minute grid**, which is itself evidence. Two windows before
+the UI declares a loss is what a display that does not want to alarm on a single miss would do; a
+~5-window reservation lapse is a plausible round number in firmware. Nothing lands at an odd interval,
+which fits a DESIGNED timeout rather than an emergent contention effect.
+
+**Still open:** the mechanism is inferred, not observed. The D2W connection cadence in our own watch log
+across 17:01–17:25 is the direct evidence and has not been read yet — it will show whether D2W's
+connect events actually stopped, and whether OUR readings continued through the same window.
+
 #### H9b — Dexcom's OWN remedy is a Bluetooth toggle, and its stated wait is HALF the natural heal
 
 Jeremy, 2026-08-19: *"the Dexcom app recommends toggling bluetooth and waiting 10 minutes in response
