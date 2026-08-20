@@ -190,3 +190,31 @@ unified too. Listed here so it is not lost, but it belongs on the prediction wor
 **Related, same sighting:** "recommend" rendered blank — the REC nil window was closed on 2026-08-18 by
 filling the recommendation before installing the context, so either a path was missed or this is a
 different cause.
+
+---
+
+## 11. The takeover-failure message blames the battery, and we do not believe that
+
+**Seen:** 2026-08-19 21:28. *"Sport Mode didn't start — the watch app stopped running mid-connect
+(pwr 40%/batt). Your phone still has the pod. Keep the watch awake — wrist up or screen on — and try
+again."*
+
+**Why it is wrong, not just cluttered.** Putting `pwr 40%/batt` in a failure explanation implies the
+battery caused it. On the same day, the battery confounder was WITHDRAWN outright from
+`BLE_ECOSYSTEM_MODEL.md`: the evidence never showed a monotonic effect, and 85% → 65% changing radio
+behaviour was never plausible. Low Power Mode remains plausible and is uninstrumented — but that is a
+different claim from the charge level, and the message states the one we do not believe.
+
+A user reading this learns the wrong lesson (charge the watch) and does not learn the right one.
+
+**What is RIGHT about it, and should survive any rewrite:**
+- *"Your phone still has the pod"* — names the owner, so nothing looks lost. This is the copy pattern
+  the "returning records" state was just changed to imitate.
+- *"Keep the watch awake — wrist up or screen on"* — actionable, and matches the actual failure ("the
+  watch app stopped running mid-connect").
+
+**Candidate:** drop the battery parenthetical. If a power fact belongs there at all it is LOW POWER
+MODE, once instrumented (Part 5 item 7 of the BLE model) — that one has a plausible mechanism and a
+remedy the user can act on. The charge percentage has neither.
+
+**Cost:** trivial. Deleting a substring.
