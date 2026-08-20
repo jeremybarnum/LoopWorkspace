@@ -603,3 +603,32 @@ And symmetrically, from the pod side: during e141's failures the Mac heard the p
 
 **Status: candidate only.** n=1 on the G7 side. The retrospective test on tonight's logs is the first
 real evidence either way and requires no new run.
+
+---
+
+### H12 — PRE-REGISTERED 2026-08-20 01:05. **A held connection starves the WATCH's scanning device-wide.**
+
+**Claim.** When the watch holds a BLE connection (tonight: the pod, held ~180 s of every ~183 s), the
+watch's advertisement RECEPTION degrades across the whole device — our pod scan, our G7 scan, AND
+Dexcom's own D2W app. Not a two-centrals-in-one-process effect (that was H10, dead); a device-level
+scheduling effect.
+
+**The observation that forced it:** during the 00:22–00:57 G7 outage, D2W — a separate process with
+its own central — reported no signal at the same time as our stack, while the Mac recorded the sensor
+transmitting on grid the entire time (every burst 00:21:36 → 00:56:37 present, gaps 293–298 s). Both
+collectors deaf, sensor innocent, pod held ~99% throughout.
+
+**Predicts:** reception recovers when the held link drops. G7 window hit-rate should track pod-FREE
+intervals; the outage should end within ~1–2 windows of a sustained release.
+
+**Falsified by:** a sustained held-pod period with normal G7 hits (counter-example already on file:
+00:21:40 landed while held — n=1 against), or an outage persisting through a sustained pod-free period.
+
+**Note on the recovery just observed (~00:57–01:05, "late but not that late"):** the pod's last advert
+before recovery was 00:55:32 — a free gap — and the 00:56:37 burst was the first after it. Whether the
+CATCH coincided with a free interval needs the watch log (radios still off when this was written).
+Scored when the mirror lands.
+
+**Branch caveat (Jeremy's correction, accepted):** next-dev changed BOTH the G7 stack and the pod
+stack relative to pure, so nothing here attributes to either alone. Pure may or may not exhibit this;
+that is an open empirical question, not an inference.
