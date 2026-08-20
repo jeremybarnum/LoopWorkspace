@@ -67,16 +67,37 @@ Three separate blindnesses, all now fixed:
 L5 FAILED after 14 read(s) in 28.2s — never reconnected · adverts=N anySeen=M skipped=K …
 ```
 
-- `anySeen=0` → **deaf**. The connect side is irrelevant; chase the radio.
-- `anySeen>0, adverts=0` → **rejected**. Filter or address match; the pod frames are
-  arriving and we are discarding them.
+- `anySeen>0, adverts=0` → **rejected**. Frames arrived; the address match discarded
+  them.
 - `adverts>0, skipped>0` → heard and refused at the adopt gate (now dwell-qualified,
   so it only fires on a genuine wedge).
 - `adverts>0, skipped=0, no connect` → a gate we haven't instrumented. New finding.
 
-Plus, if the scan really is deaf, the watchdog now fires at 15-20 s **inside** the
-ladder and restarts it, leaving 8-13 s to recover — so this build may also *fix* the
-deaf case, not merely name it.
+### Correction, same day: `anySeen=0` is NOT deafness
+
+The first cut of this document read `anySeen=0` as "deaf". That was wrong, and the
+11:08 build fixes it. **The takeover scan is filtered** — `scanForPeripherals(withServices:
+[podScanServiceUUID], allowDuplicates: true)` — so the only thing that can raise
+didDiscover at all is a pod. A deaf central and a pod whose frames never arrive or never
+match therefore produce the *same* `anySeen=0`. A filtered scan cannot answer the
+question from inside itself.
+
+**The wildcard probe is the answer.** Every odd watchdog restart now re-arms with no
+service filter, and `wildcard=heard/Ns` rides in the census:
+
+- `wildcard=0/Ns` in a room with any BLE traffic → **deafness demonstrated**, not inferred.
+- `wildcard=N>0` → the central is receiving. Deafness is off the table; the fault is in
+  the frames, the filter, or the address match.
+
+It is also a candidate fix: a wildcard scan is a strict superset of the filtered one, and
+the adopt path matches the address out of the parsed advertisement rather than caring
+which filter surfaced it. **If the service filter is wrong for this pod, the wildcard arm
+adopts it and the takeover recovers.** The scan-arm line now also names which branch chose
+the filter (`via O5/pdm-derived` vs `via profile(...)`), because a wrong branch scans
+forever with no symptom but silence.
+
+Plus, the watchdog now fires at 15-20 s **inside** the 28.2 s ladder rather than 17 s
+after it ends, leaving 8-13 s for a restarted scan to recover.
 
 ## Where the deferred items sit
 
@@ -87,6 +108,16 @@ deaf case, not merely name it.
 | stuck-`.connecting` handling | detector only | **not this bug.** The peripheral was `.disconnected`, not wedged. The dwell-qualified adopt gate will say `WEDGED` if it ever is; only then is the handling worth building. |
 | grant-gate replacement | no | unrelated — that is the phone refusing a Start tap. Own build, needs a design. |
 | glance off the queue | no | unrelated — UI responsiveness. Own build. |
+
+## What to read off the next failing loan
+
+One line, in this order:
+
+1. `[loan-takeover] scan started (filter=… via …)` — is the filter branch right?
+2. `[scan-watchdog] … filter=WILDCARD probe` — did the watchdog fire at all inside the ladder?
+3. `L<n> FAILED … adverts=A anySeen=S skipped=K wildcard=W/Ts` — the verdict.
+
+If the ladder now SUCCEEDS on a wildcard restart, the service filter was the bug.
 
 ## Honest residual
 
