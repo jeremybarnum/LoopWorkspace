@@ -659,3 +659,35 @@ three observed events (23:41:37→e141's pod deafness ~27 min; 00:21:40→tonigh
 **Falsified by:** a deafness onset with no preceding G7 ride, or a recovery provably triggered by
 something else (e.g. app relaunch), or the 00:22–00:57 log showing normal didDiscover delivery (which
 would mean the watch heard and dropped higher up).
+
+---
+
+## END-OF-NIGHT SYNTHESIS — 2026-08-20 01:30
+
+### MECHANISM 1 (G7 outage): SOLVED, fix-ready
+Known-sensor branch (`G7BluetoothManager:270`) issues a bare pending connect and never arms the scan;
+bluetoothd's duty-cycled connect-scan vs 1–4 s bursts per 300 s is a lottery; the sensor escalates to
+~60 s cadence after ~15 min uncollected (MEASURED 00:37:36 — the "exact 300 s grid" is the COLLECTED
+regime only); landing 5–25 min later gives the observed 20–40 min. Cross-app simultaneous recovery =
+trigger (b) riding whoever wins. **Fix: arm the scan alongside the pending connect until didConnect.**
+
+### MECHANISM 2 (scan deafness): cornered by elimination
+`isScanning=true` + `allowDuplicates=true` (verified `:1313`) + app executing + pod at −56 dBm every
+few seconds on the Mac + ZERO didDiscover for minutes, both platforms. Eliminated tonight: phone
+contention (faraday), suspension (heartbeat clean, 32 foregrounds), orphaned intents (deaf with
+open=0 ORPHANED=0 minutes after a BT toggle), duplicate filter (allowDuplicates already true).
+
+### H14 — REGISTERED. Zombie scan sessions.
+**Claim:** the scan session dies at the bluetoothd level while the client's `isScanning` stays true;
+re-arms that skip `stopScan` (e.g. the settle's re-issue at 01:15:43 onto an already-"scanning"
+central) inherit the dead session. Explains the lying flag, the Mac's immunity (own healthy session),
+and why BT toggles / app restarts cure it.
+**Predicts:** recoveries coincide with a genuine stopScan→scan cycle or central recreation; a forced
+restart un-deafens within one advert (~seconds for the pod).
+**Falsified by:** a deaf period surviving a verified stopScan→scanForPeripherals cycle, or a recovery
+with provably no session restart anywhere.
+**Instrument AND remedy (correct under any theory): the scan-restart watchdog** — isScanning=true and
+zero discoveries-of-ANYTHING for 60 s while traffic is expected → stopScan → fresh scan → count it.
+Self-healing if H14 is right; a measurement either way.
+
+### Tomorrow's build: G7 scan-arm fix · scan watchdog · Radio Lab panel. All small.
