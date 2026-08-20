@@ -691,3 +691,13 @@ zero discoveries-of-ANYTHING for 60 s while traffic is expected → stopScan →
 Self-healing if H14 is right; a measurement either way.
 
 ### Tomorrow's build: G7 scan-arm fix · scan watchdog · Radio Lab panel. All small.
+
+#### H14 — first data point, 2026-08-20 01:35 (weak, consistent)
+After the 300 s settle ceiling, the phone's pod pill showed a fault/issue state ("sensor issue");
+**force-quit + relaunch resolved it immediately.** Third force-quit-as-remedy this session, each
+following a settle that cleared unverified. A force-quit is the bluntest scan-session restart — all
+centrals destroyed and rebuilt — so immediate recovery is what H14 predicts, though it resets too much
+to be proof. The scan-restart watchdog is the controlled version of this exact intervention.
+
+UX note (for the list): a comms wedge presenting as a pod *fault* on the pill is misleading copy — the
+pod was healthy and advertising throughout, per the Mac.
