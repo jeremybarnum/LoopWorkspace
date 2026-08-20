@@ -264,3 +264,35 @@ users learn to ignore an alert that will one day matter.
 
 The dead-man's real job — "nobody is looking after this pod" — is only true when the WATCH is failing,
 not when the phone is simply absent by design.
+
+---
+
+## 14. The prediction freezes while IOB/COB keep moving — and nothing says so
+
+**Seen:** 2026-08-20, loan e141, before hand-back. Jeremy: *"the UI was out of sync with dosage and
+prediction."* Measured cause, from the log: [MEAS]
+
+```
+00:07:07  [dosemath] eventual 71 ... IOB 1.10          <- what DOSING used
+00:07:23  [glance]   RENDER iob=1.20                   <- what the SCREEN showed, 16 s later
+00:07:32  CYCLE VERDICT computed=ok enact=FAILED communication(nil)
+                                   lastCompletedAge=1622s
+```
+
+**No loop cycle had completed in 27 minutes**, because every reclaim ladder was failing and each enact
+returned `communication(nil)`. But the glance renders IOB and COB live off the stores, on a path that
+needs no pod. So the two halves of the screen diverge: **the live numbers keep moving while the
+prediction and recommendation stay frozen at the last cycle that completed.**
+
+**This is a SYMPTOM, not a separate defect.** It self-heals once the receive problem (see the
+2026-08-20 addendum in `SESSION_2026-08-19_RADIO.md`) is fixed. The maths was never wrong — the same
+loan reconciled at `residual=-0.000 U`.
+
+**But the UI should still say it.** The app already knows `lastCompletedAge`. A prediction 27 minutes
+stale should be visibly marked as such — exactly the treatment the glance ALREADY applies correctly to
+stale glucose (dim, no arrow, age line). Same principle, applied to the other half of the screen.
+
+**Cost:** small. The value is in hand; only the rendering is missing.
+
+**Related:** #10 (two eventual surfaces disagreeing) is a different mechanism — same snapshot read at
+different times — and still stands on its own.
