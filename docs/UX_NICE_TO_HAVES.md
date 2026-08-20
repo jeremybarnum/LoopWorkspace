@@ -296,3 +296,21 @@ stale glucose (dim, no arrow, age line). Same principle, applied to the other ha
 
 **Related:** #10 (two eventual surfaces disagreeing) is a different mechanism — same snapshot read at
 different times — and still stands on its own.
+
+---
+
+## 15. Reclaim is fast now — the settle UI may be over-cautious
+
+**Seen:** 2026-08-20, Jeremy: *"reclaim is nice and fast now. We might be able to improve UX."*
+
+Post-fix hand-backs have been landing at `link up +0.0s` / `reclaim VERIFIED +1s` repeatedly, against a
+settle ceiling of 300 s and UI copy written for the era when the link genuinely took minutes to come
+back. When the common case is one second, a spinner and a countdown sized for five minutes is the
+wrong shape.
+
+**Candidate:** keep the ceiling (it is a safety bound and the slow case still exists), but let the UI
+treat a sub-2 s verified reclaim as instant — no spinner, straight to "pod is back on iPhone". Show
+progress only once the settle passes a threshold worth remarking on.
+
+**Do not do until:** enough post-fix hand-backs to know the fast case really is typical rather than a
+run of luck. The settle-ceiling failures of 2026-08-19 are recent.
