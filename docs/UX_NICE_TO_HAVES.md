@@ -240,3 +240,27 @@ confirmed" vs "…assumed").
 
 **Status: TBD per Jeremy.** Parked; not to derail radio work. Note #8's 400ms delay only touches the
 pre-acceptance label and is unrelated to this.
+
+---
+
+## 13. The dead-man warning fires for PHONE unreachable — which is the core use case, not an emergency
+
+**Seen:** 2026-08-20 00:01, during the faraday-cage arm. Jeremy: *"I got the dead man's warning on the
+watch, which is kinda wrong."* The loan was healthy: watch held the pod, sensor transmitting on grid
+(verified independently by the Mac observer, four consecutive windows), dosing proceeding.
+
+**Why it is wrong.** The alert keys on the PHONE being unreachable. But an hour of exercise with the
+phone in a locker IS the product — deliberate phone-absence is the design, not a fault. The genuinely
+dangerous condition is the WATCH being unable to reach the POD, which is a different thing and is
+currently conflated with it.
+
+**Consequence:** it cried wolf at exactly the moment the system was working perfectly, which is how
+users learn to ignore an alert that will one day matter.
+
+**Candidate:** split the two conditions.
+- **Phone unreachable, loan healthy, pod reachable** → status line, not an alert ("running on watch —
+  phone out of range"). Arguably a reassurance, since the user deliberately left it behind.
+- **Pod unreachable** → keep the alarm. That is the one that means dosing has stopped.
+
+The dead-man's real job — "nobody is looking after this pod" — is only true when the WATCH is failing,
+not when the phone is simply absent by design.
