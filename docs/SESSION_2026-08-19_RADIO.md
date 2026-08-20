@@ -265,3 +265,16 @@ CONNECT, but starving our SCAN's advertisement delivery.
 **Method note.** Every wrong turn today came from inferring the world from one device's view. The Mac
 observer settled in one query what two days of watch-side logs could not, because it could see what was
 actually in the air. Keep it running for every future run.
+
+
+---
+
+# CORRECTION 2026-08-20 (review) — the addendum's "perfect separation" was likely CIRCULAR
+
+The advert census behind the 15-failures-at-adverts=0 table counted only pods in `autoConnectIDs` —
+inserted on ADOPT, removed by the RELEASE path. A failed ladder (post-release, never adopted) was
+therefore mechanically blind, whatever the radio heard: `adverts>0 ⟺ adopted ⟺ success` is close to
+a tautology. **"The watch cannot HEAR the pod" is UNSUPPORTED.** What survives: the pod was available
+(Mac observer) and the ladders failed — mechanism unknown. H14 rested partly on that table and is
+downgraded accordingly; the census now counts by address match, and the intent ledger (never
+membership-gated) — e.g. the L10 self-cancelled connect — is the better evidence stream.
