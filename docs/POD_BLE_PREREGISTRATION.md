@@ -518,3 +518,49 @@ a single failure does not prove it. **What is being tested is whether the e141 b
 
 **Record:** the minute the phone's radios go off, the minute G7 first connects on the watch, and the
 minute of the bolus attempt.
+
+#### H10 RESULT — 2026-08-20 00:22. **DEAD, by its own pre-registered falsifier.**
+
+The arm ran with the phone's radios OFF, so the phone is exonerated for the third time. [MEAS]
+
+```
+00:18:05  phone radios OFF
+00:20:52  pod's last advertisement (MAC) — pod FREE, rssi -56..-62, every few seconds
+00:20:57  bolus attempted -> HANGS          <- G7 NOT yet direct
+00:21:40  G7 goes direct on the watch
+00:22:38  pod still silent = HELD by the watch
+~00:22    second bolus -> SUCCEEDS          <- G7 LIVE
+```
+
+**H10 predicted the opposite in both halves.** It said pod comms work before the G7 connects and break
+after. What happened: the bolus HUNG before the G7 was live, and SUCCEEDED after. The registered
+falsifier ("bolus SUCCEEDS with adverts>0 => H10 dead") fired exactly as written.
+
+**So the e141 boundary (23:41:37 G7 connect, failures from 23:42:03) was COINCIDENCE.** Two
+`CBCentralManager`s in one process is not the mechanism. That is 2026-08-18's H1 dead for the second
+time, on better evidence.
+
+### What survives, and it is worth stating plainly
+
+1. **The receive failure is REAL and is the root cause.** Independently confirmed twice: the Mac heard
+   the pod 7-15 times per window during e141's failed ladders, and again at 00:20:52 — five seconds
+   before a bolus hung — at -56 dBm.
+2. **The phone is not the cause.** Three separate exonerations now: the faraday window, the caged
+   ladders L6-L11, and this radios-off arm.
+3. **It is INTERMITTENT and SELF-RESOLVING.** The pod became reachable ~90 s after the hung attempt,
+   with no intervention. e141's ladders failed for 27 minutes; here it cleared in ~90 seconds.
+4. **Every structural theory is now dead** — G7 scan contention, connection-slot exhaustion, leaked
+   intents, duplicate connects, phone contention, two-central starvation. What is left is a
+   PROBABILISTIC acquisition failure whose trigger nothing so far predicts.
+
+### Where to look next, given everything above is eliminated
+
+The remaining candidates are all about the SCAN ITSELF rather than about who else is on the radio:
+
+- **Is our pod scan actually running when a ladder fails?** Log `centralManager.isScanning` at every
+  failed read. Nobody has checked whether the scan is armed at all.
+- **Is the central deaf, or mis-filtered?** Log EVERY `didDiscover` regardless of service filter. If
+  the central sees zero peripherals of any kind while the Mac sees traffic, it is starved; if it sees
+  others but not the pod, the filter or the pod's advertised services are the issue.
+- **Does a scan restart clear it?** The self-resolution after ~90 s is suspicious: something re-armed.
+  Finding what re-armed is likely to name the fix.
