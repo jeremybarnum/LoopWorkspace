@@ -218,3 +218,25 @@ MODE, once instrumented (Part 5 item 7 of the BLE model) — that one has a plau
 remedy the user can act on. The charge percentage has neither.
 
 **Cost:** trivial. Deleting a substring.
+
+---
+
+## 12. Bolus progress should track ACTUAL pod delivery, not a display timer
+
+**Raised:** 2026-08-19 23:4x, mid-test. Jeremy, on the delayed "starting…" label (#8): *"what we
+actually want is to try to track the actual dosage delivery by the pod. Anyway it's TBD."*
+
+**The distinction.** The current delivery narration (like stock Loop's) advances on an ESTIMATED
+schedule — units × pulse rate — not on pod truth. It reads as progress but is a clock. What is wanted:
+the wrist showing delivered-so-far as the POD reports it, so an interrupted or faulted bolus shows
+where it actually stopped rather than where the timer got to.
+
+**The mechanics, honestly:** the pod does not stream progress. Delivered units come from status reads
+(the odometer the loan reconciliation already uses). Tracking real delivery therefore means polling
+during the bolus window — which costs radio exactly when the link is already busy — or reading once at
+completion and reconciling the display. The cheap honest version: keep the timer narration DURING
+delivery, but reconcile the final number against the pod's odometer and SAY so ("2.00 U delivered,
+confirmed" vs "…assumed").
+
+**Status: TBD per Jeremy.** Parked; not to derail radio work. Note #8's 400ms delay only touches the
+pre-acceptance label and is unrelated to this.
