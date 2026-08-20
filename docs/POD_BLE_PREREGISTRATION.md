@@ -632,3 +632,30 @@ Scored when the mirror lands.
 **Branch caveat (Jeremy's correction, accepted):** next-dev changed BOTH the G7 stack and the pod
 stack relative to pure, so nothing here attributes to either alone. Pure may or may not exhibit this;
 that is an open empirical question, not an inference.
+
+#### H12 STATUS — wounded at birth, by Jeremy's question and the Mac's own boundaries
+
+*"If it's all about held connections, then why would it get salvaged?"* — the outage is TIME-BOUNDED
+(20–40 min, self-healing) while the hold cycle runs unchanged through recovery. And both boundary
+catches (00:21:40, 00:56:37) landed WHILE the pod was held; e141's deaf period ran while the pod was
+FREE. Held-state discriminates nothing. A static cause cannot produce a bounded outage.
+
+### H13 — PRE-REGISTERED 2026-08-20 01:15, BEFORE the watch log lands. **G7 ride-teardown wedges reception; a ~20–40 min timer clears it.**
+
+**Claim.** Completing a G7 connection ride leaves the watch's advertisement reception wedged —
+device-wide, D2W included — and something with a ~20–40 minute period un-wedges it.
+
+**The cross-event invariant it rests on:** deafness began immediately after a G7 didConnect in all
+three observed events (23:41:37→e141's pod deafness ~27 min; 00:21:40→tonight's G7 deafness ~35 min;
+17:01:36 ride→the 22.6 min outage). Pod hold state differed across them; the ride did not.
+
+**Whose timer — the discriminating read, from the 00:22–00:57 watch log when it mirrors:**
+- A rebuild/re-arm line (watchdog, stack recycle, scan restart) at ~00:56 → **OURS**; fix = run it
+  sooner or fix the wedge it clears.
+- `scan STARTED` armed throughout, zero deliveries, nothing at the recovery moment → **watchOS
+  internal expiry**; matches the BT-toggle remedy (a manual expiry) and Dexcom's 10-minute advice;
+  fix = avoid the wedge, i.e. change ride teardown.
+
+**Falsified by:** a deafness onset with no preceding G7 ride, or a recovery provably triggered by
+something else (e.g. app relaunch), or the 00:22–00:57 log showing normal didDiscover delivery (which
+would mean the watch heard and dropped higher up).
