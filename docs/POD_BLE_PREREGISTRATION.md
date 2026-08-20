@@ -564,3 +564,42 @@ The remaining candidates are all about the SCAN ITSELF rather than about who els
   others but not the pod, the filter or the pod's advertised services are the issue.
 - **Does a scan restart clear it?** The self-resolution after ~90 s is suspicious: something re-armed.
   Finding what re-armed is likely to name the fix.
+
+---
+
+### H11 — PRE-REGISTERED 2026-08-20 00:29, BEFORE the confirming data. **Holding one link deafens the scan for the other.**
+
+**Claim.** The watch can HOLD a BLE connection or RECEIVE advertisements, but not both well. Whichever
+link is currently held, the other stack's scan stops getting `didDiscover` callbacks for traffic that
+is provably in the air.
+
+**Why this and not H10.** H10 said two centrals SCANNING starve each other, and died: the bolus
+succeeded with the G7 live. H11 says the conflict is between HOLDING and SCANNING — a different
+mechanism using the same two stacks, and it is not touched by H10's falsifier.
+
+**The observations it was built from (both [MEAS], both independently corroborated by the Mac):**
+
+| when | pod link | G7 outcome |
+|---|---|---|
+| e141 23:42–00:07 | NOT held (11 ladders failing) | **fine** — readings at `g7direct=28s, 56s` |
+| 2026-08-20 from 00:25:22 | **HELD** (pod silent on the Mac = watch has it) | **missed 00:26:37 window, then went STALE** |
+
+And symmetrically, from the pod side: during e141's failures the Mac heard the pod 7-15 times per
+28-second window while the watch heard **zero** — a scan deaf to traffic at -56 dBm.
+
+**Predicts:**
+1. **G7 window misses cluster inside pod-held intervals.** Testable RETROSPECTIVELY from data already
+   captured: pod-silence intervals come from the Mac, G7 ingest times from the watch log.
+2. Pod ladder failures cluster inside G7-connected intervals (the ~11 s window per 5 min).
+3. Both failures should END when the competing link drops — which matches the observed
+   self-resolution (e141: 27 min; 2026-08-20: ~90 s) without anyone intervening.
+
+**Falsified by:**
+- G7 misses distributed evenly with respect to pod-held intervals.
+- Any sustained period with BOTH a held pod link AND on-time G7 windows.
+- e141's counter-case standing up: ladders there failed for 27 minutes while the pod was NOT held and
+  the G7 was working — under H11 the pod scan should have been fine in that window. **This is the
+  strongest thing against H11 and must be explained or it dies.**
+
+**Status: candidate only.** n=1 on the G7 side. The retrospective test on tonight's logs is the first
+real evidence either way and requires no new run.
