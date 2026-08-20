@@ -334,6 +334,45 @@ which fits a DESIGNED timeout rather than an emergent contention effect.
 across 17:01–17:25 is the direct evidence and has not been read yet — it will show whether D2W's
 connect events actually stopped, and whether OUR readings continued through the same window.
 
+#### H9 RESULT — 2026-08-19/20 FARADAY ARM. **Unreachability does NOT reproduce it. H9 is mis-specified.**
+
+**The arm.** Phone into a faraday cage at 23:44:28 with a healthy loan running — powered on, BLE alive,
+simply unreachable. No shutdown, no reboot. The closest controlled analogue of the swimming case.
+
+**The Mac observer, which is neither collector:** [MEAS]
+
+```
+23:41:37  ADV G7  gap=295.8s     <- last before the cage
+23:44:28  ---- phone into faraday cage ----
+23:46:36  ADV G7  gap=293.1s     OK
+23:51:38  ADV G7  gap=297.8s     OK
+23:56:37  ADV G7  gap=293.8s     OK
+00:01:36  ADV G7  gap=295.4s     OK
+```
+
+**Four consecutive windows, every one within 5 s of the exact 300 s grid.** The sensor did not react in
+any way to a bonded collector vanishing.
+
+**And the watch kept looping GREEN throughout** — no G7 staleness, no outage. So the phenomenon did not
+reproduce at all.
+
+**What this kills.** Both branches of H9 as written. Not the "sensor shock" story (the sensor was
+serene), and not the collector-slot story either — because nothing went wrong to explain. Jeremy also
+notes **overnight phone-OFF runs have looped cleanly**, which independently rules out phone absence as
+a sufficient trigger.
+
+**So the 2026-08-19 17:01 event — both collectors dark for 22 minutes, 36 s after power-off — remains
+UNEXPLAINED, and its correlation with the power-off is now suspect.** One co-occurrence plus a
+remembered pattern is not a mechanism, and the controlled test says absence is not it.
+
+**What is still solid from that night:** the recovery was a TIMEOUT not a re-negotiation (healed with
+the phone still gone, H9a), and the durations were quantized to the sensor's 5-minute grid. Those
+describe the SHAPE of the event. Its TRIGGER is unknown.
+
+**Next time it happens** — and it will, per Jeremy's history — the Mac observer is now the instrument
+that settles it in one reading: sensor transmitting through the outage means collector-side and
+fixable; sensor silent means something we have never seen. Leave it running.
+
 #### H9b — Dexcom's OWN remedy is a Bluetooth toggle, and its stated wait is HALF the natural heal
 
 Jeremy, 2026-08-19: *"the Dexcom app recommends toggling bluetooth and waiting 10 minutes in response
