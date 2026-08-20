@@ -40,3 +40,46 @@ worst-of implementation (de3cb5a9 + 28cd6c0) is STRICTER than this and must be r
 - 28cd6c0 already contains: watchdog scan-lifecycle fix, predictionStale rendering, main-hop on the
   bolus repaint, e141-circularity docs correction, cancel attribution, census-by-address, adopt-gate,
   ring worst-of (to be relaxed per the rule above), bolus-ack repaint, Radio Lab.
+
+---
+
+## After the 2026-08-20 10:47 ship (ladder self-diagnosis + ring rule)
+
+**Shipped:** census `anySeen`/`skipped`, watchdog 5 s/15 s capped at 3 per arm, sticky
+`lastKnownLoanPodId`, dwell-qualified adopt gate, `noteLinkTornDown` for the two
+unattributed cancel sites, `freshConnect` obeying its verdict, ring on loop age alone.
+
+**Dropped from the plan, deliberately:** the reclaim ladder re-issuing a dead connect.
+The 13:00:16 trace shows the peripheral `.disconnected` for all 14 reads, so no connect
+was ever issued — there is nothing to re-issue. See `POD_ENACT_DIAGNOSIS.md`.
+
+### 1. `testANewGrantDoesNotInheritAFailedTakeoversClock` is RACY
+
+Failed the gate at 10:30 (`got: +0s`, expected `+10s`), then passed **3/3 in isolation**
+and the full gate passed on re-run. Nothing since the last green gate (08-19 22:56)
+touches `PodLoanPhoneController.swift` or its test.
+
+Mechanism: `armT1(for:)` — which stamps `grantOfferedAt` — runs at the END of a deep
+async chain (carb fetch, glucose fetch, prediction snapshot) inside `offerGrant`. The
+test advances its fake clock and injects the status report immediately after
+`offerGrant` returns. Under full-suite load the stamp has not landed, `grantOfferedAt`
+is nil, and `elapsed` falls through to `?? 0`.
+
+**This is not only a test bug.** The same window exists in the field: a status report
+arriving before `armT1` lands makes the phone report `+0s`, and `elapsed < ceiling` is
+then trivially true — the takeover-progress ceiling that exists to stop a wedged watch
+holding the pod hostage would not fire. The window is small (the watch has to answer a
+grant faster than the phone finishes its own snapshot) but it is the wrong direction to
+fail in. Fix: stamp `grantOfferedAt` when the grant is DECIDED, not when the message
+finishes being built.
+
+### 2. Deferred, with reasons (asked 2026-08-20)
+
+- **stuck-`.connecting` handling** — the detector shipped (dwell-qualified adopt gate).
+  Build the handling only if a ladder actually prints `WEDGED`. This morning's failure
+  was `.disconnected`, so it is not that bug.
+- **grant-gate evidence-keyed replacement** — unrelated to pod enact; own build.
+- **glance off the queue** — UI responsiveness; own build.
+- **G7 watchdog: D2W stamping, per-arm baseline, teardown cancel** — G7 held 34/34
+  overnight. Real, but it protects a path that is currently working.
+- **Unit tests for the radio layer** — still zero.
