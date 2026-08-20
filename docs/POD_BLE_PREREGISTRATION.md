@@ -701,3 +701,42 @@ to be proof. The scan-restart watchdog is the controlled version of this exact i
 
 UX note (for the list): a comms wedge presenting as a pod *fault* on the pill is misleading copy — the
 pod was healthy and advertising throughout, per the Mac.
+
+---
+
+## MECHANISM 1 — CONFIRMED IN THE FIELD, 2026-08-20 overnight
+
+The fix (arm the scan through the pending-connect phase) was pre-registered as predicting "no G7 gap
+beyond one window." The overnight run tested exactly the failing scenario — loan live 02:17, phone's
+Bluetooth OFF from 02:18 — and the watch's own log says: [MEAS]
+
+```
+02:21:39  INGEST src=direct-G7  age 5s
+   ... 34 CONSECUTIVE 5-minute windows, unbroken ...
+05:06:40  INGEST src=direct-G7  age 6s     <- stops only when the watch battery dies
+```
+
+**34/34 windows, 2 h 45 m, phone absent, every reading caught 3-7 s after the sensor's burst** — the
+signature of an armed scan taking the FIRST advertisement rather than a pending connect waiting out
+bluetoothd's duty cycle. Independently corroborated by the Mac observer: the sensor held its 293-298 s
+collected cadence throughout and only escalated to ~60 s distress at 05:22, after the watch died.
+
+Prior night, identical scenario, pre-fix: seven consecutive missed windows and repeated 20-40 min
+outages. Same sensor, same watch, same room, same observer.
+
+**Mechanism 1 is closed.** The scan was the load-bearing service on the wrist; not arming it after a
+ride starved our G7, D2W (a suspended app living on pending connects), and drove the sensor's own
+distress escalation.
+
+### Correction: the watchdog I shipped to probe H14 was crying wolf
+
+It fired 69 times that night — every 20 s, reported age climbing to 7777 s — because **a connected pod
+does not advertise**, and the E4 reclaim path arms the loan marker while the pod is already connected.
+The silence was correct; the watchdog called it deafness and churned stopScan + re-arm for nothing. It
+also measured from a session-wide stamp rather than per-arm. Both fixed (skip while
+.connected/.connecting; reset the baseline per arm) and shipped in 9ed250d.
+
+**Consequence for H14: still untested.** The instrument meant to probe it spent the night on false
+positives. The pod-side deafness of 2026-08-19/20 (scan armed, allowDuplicates true, Mac hearing the
+pod at -56 dBm, watch hearing zero) remains unexplained. With the watchdog honest, `scanWD=N` on a
+loan with the PHONE PRESENT is now the clean test — 0 means no real deafness occurred.
