@@ -105,3 +105,61 @@ Form {
 Wiring cost estimate: the G7 toggles and pod picker are gates around existing call sites; guard-band
 and hold-with-yield are the only new logic. One build, then every experiment above is a 10-second
 switch instead of an install.
+
+---
+
+# IDEA (parked 2026-08-20) — guardrail tests for the BLE paradigm
+
+Jeremy: *"I wonder if there is a way to write some tests that highlight risks associated with changes
+in this part of the code base — like 'woah, you just changed something that matters a lot and we're
+not sure why and it might break a key part of the BT paradigm, are you sure?'"*
+
+**Why this is the right instinct.** Every BLE regression this project has suffered was a ONE-LINE
+change to a condition whose importance was invisible at the site:
+
+| the change | what broke | how long to find |
+|---|---|---|
+| scan armed only when `activePeripheral == nil` | 20–40 min G7 outages, D2W included | ~2 days |
+| `connectionReleasedForLoan` guard, not gated to iOS | the watch refused its OWN connects | ~1 hour, 18 refusals |
+| watchdog fired without checking `.connected` | 69 spurious scan restarts in a night | one night |
+| `disconnectFromDevice` empties `autoConnectIDs` | advert census silently stopped counting | ~2 days (my own instrument) |
+
+None would be caught by a normal unit test, because none is about a computed value — they are about
+**invariants of radio state that only manifest against real hardware over tens of minutes.**
+
+## What the tests would actually assert
+
+Not "does this function return X". Rather: **paradigm invariants**, each learned the hard way and each
+citing the incident that taught it.
+
+1. **"We are never both disconnected and not scanning while we want the pod."** Fake central; drive
+   the state machine through release → reclaim → connect-fail → escalate; assert scanning is armed in
+   every state where a connect is pending or wanted. Catches the G7 bug's whole family.
+2. **"Nothing that gates a connect is compiled into both platforms without an os() check."** The pod
+   is LENT by the phone and HELD by the watch; `releaseConnection()` means opposite things on each.
+   A lint/test over the guard sites.
+3. **"Every connect intent reaches a terminal state."** didConnect / didFailToConnect / explicit
+   cancel — assert no path can leave one open (the `pendingAdopt` + `open=0` anomaly of 2026-08-20).
+4. **"An advertisement matching our pod's ADDRESS is always actionable"** — never gated on a
+   collection (`autoConnectIDs`, `devices`) that a release empties.
+5. **"A watchdog never fires while the thing it polices is healthy"** — assert quiet under a connected
+   peripheral (the 69-firing bug).
+
+## The "are you sure?" mechanism
+
+Two layers, cheap first:
+
+- **A CODEOWNERS-style tripwire**: a test that hashes the ~10 known-load-bearing conditions (the scan
+  arm, the interlock guard, the adopt gate, the release path) and FAILS when one changes, with a
+  message naming the incident that condition prevents and requiring the hash to be updated
+  deliberately. Not correctness — *attention*. Exactly the "woah, are you sure?" Jeremy describes.
+- **A fake-central harness** so invariants 1–5 can be executed rather than asserted by eye. Bigger
+  build; do it only if the tripwire proves it is needed.
+
+## Why the ship gate is not enough today
+193 tests pass while every one of the regressions above shipped. They test dosing math and protocol
+logic — the deterministic parts. **The radio layer has no test at all**, which is why every one of its
+bugs was found on a wrist, at night, hours after it shipped.
+
+**Status: parked idea, not scheduled.** Revisit once the current radio work settles — the invariants
+should be written from what is TRUE at that point, not from a model still moving.
