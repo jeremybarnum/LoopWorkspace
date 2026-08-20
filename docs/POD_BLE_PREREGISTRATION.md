@@ -481,3 +481,40 @@ just tell you.
 
 Note the direction of travel: each step has moved responsibility from the platform toward our own
 design, which is what makes Jeremy's over-engineering null the live one rather than a rhetorical foil.
+
+---
+
+### H10 — PRE-REGISTERED 2026-08-20 00:40, BEFORE the run. **Does our own G7 stack going live break pod reception?**
+
+**The observation to explain.** In loan e141 the boundary was exact:
+
+```
+23:40:25  temp ACCEPTED by pod · CYCLE VERDICT enact=ok     <- last success
+23:41:37  [g7-ble] didConnect DXCMqL                        <- G7's FIRST connection of the session
+23:42:03  enact=FAILED                                      <- and every cycle for the next 27 min
+```
+
+Before: ladders OK at `adverts=9`, bolus delivered, temp accepted. After: `adverts=0` on all 11
+remaining ladders, while the Mac observer heard the pod 7-15 times in each of those same windows.
+
+**Claim.** Two `CBCentralManager`s in one watchOS process (`G7SensorKit` + `OmnipodKit`). Once the G7
+central is actively working, the pod central stops RECEIVING advertisements — not refused connects, not
+a silent pod, but `didDiscover` callbacks that never arrive for traffic provably in the air.
+
+**The arm (Jeremy's design).** Start a loan, isolate the PHONE's radios, wait for G7 to go live on the
+watch, then attempt a manual bolus. Isolating the phone removes the only remaining confound: if the
+bolus fails anyway, the phone is exonerated for the third time and the cause is inside the watch.
+
+**Predicts:**
+- Bolus ladder FAILS with `adverts=0` while the Mac hears the pod in the same window → **H10 supported**;
+  the fix is watch-internal (scan arbitration between our two centrals).
+- Bolus SUCCEEDS with `adverts>0` → **H10 dead**; the e141 boundary was coincidence and G7-live is not
+  the trigger.
+
+**Falsifier already on record, and it matters.** The 2026-08-19 afternoon phone-off successes (L12, L17,
+L19) ran at `g7direct=5-31s` — G7 recently ACTIVE — and succeeded. So "G7 alive => pod deaf" is NOT a
+universal law; something modulates it. A single success in this arm therefore does not confirm H10, and
+a single failure does not prove it. **What is being tested is whether the e141 boundary reproduces.**
+
+**Record:** the minute the phone's radios go off, the minute G7 first connects on the watch, and the
+minute of the bolus attempt.
