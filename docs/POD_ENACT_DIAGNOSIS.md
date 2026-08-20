@@ -125,3 +125,34 @@ We do not know the mechanism. We know its *location* (discovery, not connect), w
 know four instruments that were lying about it, and the next failing ladder resolves
 it to one of three named causes on a single line. That is a materially different
 position from "the pod won't connect and we don't know why", but it is not a fix.
+
+---
+
+## RESOLVED (2026-08-20, loan e147) — the axe was our own connect-error teardown
+
+The 21-ladder loan settled it. Every cancelled pod connect intent in the loan (6/6) was
+`disconnectOnDemand`, at 0.36–1.87 s after the connect was issued, against a demonstrated
+1.28 s connect latency (the one connect nothing cancelled). The radio was never deaf
+(`wildcard=46–56` — the unfiltered probe heard half the room during "failing" ladders),
+the filter was right (`via profile(Omnipod DASH)`, advert monitor caught 0x4024 on air),
+and the foreground theory died on L14 (two APP FOREGROUND events inside a failing ladder).
+
+Caller pinned by exclusion, not luck: the idle-disconnect requires `.connected`, and an
+open connect intent excludes `.connected` (didConnect closes intents as `resolved`), so
+the canceller is the catch in `PeripheralManager.connectOnDemand` — and since its timeout
+is 20 s, the sub-2 s cancels are FAST THROWS (`notReady` / pending-conditions collision,
+runCommand's only quick exits), not timeouts. The ladder polls every ~2 s; each poll's
+fast-failing connect command cancelled the previous poll's in-flight connect. The system
+was killing its own recovery on a 2-second beat.
+
+**Fix shipped:** `disconnectOnDemand` now carries its site (`connectError` / `idle`) and
+the swallowed error; while the loan marker is armed, a connectError teardown is refused
+and the pending connect rides (logged: "pending connect LEFT RIDING"). The ledger key
+became `cancelled:onDemand-<site>`, so the two teardowns can never share a name again.
+
+**What the next loan should show:** reclaim ladders succeeding at roughly the takeover's
+latency; "LEFT RIDING" lines naming the fast error (`notReady` vs collision — the one
+remaining unknown, now instrumented); `cancelled:onDemand-connectError` at zero during
+ladders. Residual watch items: the marker can drop mid-ladder (L15's tail after
+cancelLoanScan at 12:22:18) which un-guards the final seconds, and ORPHANED should stay
+0 — a climb means a ridden connect genuinely wedged and needs the freshConnect path.
