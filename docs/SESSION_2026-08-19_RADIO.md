@@ -206,3 +206,62 @@ came from classifying every ladder and reading the phone's own counters.
 5. **Whether BT-off-only (no reboot) is a better experimental rig.** The registration breaks on boot,
    so radios-off should avoid the wedge; WCSession may survive on Wi-Fi, keeping observability.
 6. **H7** — needs an uncensored advert census (keep counting after connect, or run a scan-only probe).
+
+---
+
+# ADDENDUM 2026-08-20 00:15 — H5 IS NOT THE EXPLANATION. The watch cannot HEAR the pod.
+
+**This overturns §1 of this document.** Read it before acting on anything above.
+
+Loan e141 ran with the interlock active. Every ladder's advert census was compared against the Mac
+observer — a passive third party in the same room, which is neither app and never connects. [MEAS]
+
+| ladder | window | watch heard | MAC heard |
+|---|---|---|---|
+| L6 | 23:51:40→23:52:08 | **0** | **15** |
+| L7 | 23:52:08→23:52:37 | **0** | 7 |
+| L8 | 23:56:59→23:57:28 | **0** | 15 |
+| L9 | 23:57:28→23:57:56 | **0** | 12 |
+| L10 | 00:01:38→00:02:06 | **0** | 11 |
+| L11 | 00:02:06→00:02:34 | **0** | 13 |
+| L12 | 00:06:38→00:07:07 | **0** | 10 |
+| L13 | 00:07:07→00:07:32 | **0** | 8 |
+
+**The pod was advertising throughout every failure.** `adverts=0` does not mean the pod was silent; it
+means OUR RADIO DID NOT DELIVER what was in the air.
+
+**The phone is exonerated, by construction.** L6–L11 ran while the phone was inside a FARADAY CAGE. It
+could not reach the pod. The ladders failed identically anyway.
+
+## What this does to the day's conclusions
+
+- **H5 ("the phone holds the pod, so it stops advertising") — NOT the explanation.** It was inferred
+  from `adverts=0` plus a phone-on/off correlation. The census only ever measured OUR RECEIVER, and the
+  correlation does not survive a window where the phone was RF-isolated.
+- **The 0/13 vs 7/9 phone-on/off result stands as an observation and falls as a mechanism.** Something
+  covaried with it; the pod's availability did not.
+- **The interlock is still correct and still worth keeping.** It refused four `freshConnect` attempts
+  during e141 — the phone genuinely does reach for a pod it has lent away, which is a real defect. It
+  simply is not what breaks reclaims.
+- **H4 survives in stronger form.** The failure IS at the discovery stage — but the stage fails on the
+  RECEIVE side, inside our own process, not because the pod is unavailable.
+
+## The lead, and it is a good one
+
+The only two ladders that SUCCEEDED (L1, L2 — `adverts=9`) both ran at **`g7direct=never`**: before our
+G7 stack had connected at all. Every ladder after the G7 went live failed at `adverts=0`.
+
+**Hypothesis (untested): two CBCentralManagers scanning in one watchOS process, and only one of them
+receiving.** `G7SensorKit` and `OmnipodKit` each run their own central. That would explain tonight
+exactly, and it revives 2026-08-18's H1 in a far better-evidenced form — not the G7 starving our
+CONNECT, but starving our SCAN's advertisement delivery.
+
+**Cheap tests, in order:**
+1. Run a loan with the G7 stack disabled and see whether ladders stop failing.
+2. Log `centralManager.isScanning` on the pod central at every failed read — is our scan even running?
+3. Have the pod central log EVERY `didDiscover` (any peripheral, not just ours). If it sees nothing at
+   all while the Mac sees traffic, the central is starved, not mis-filtered.
+
+**Method note.** Every wrong turn today came from inferring the world from one device's view. The Mac
+observer settled in one query what two days of watch-side logs could not, because it could see what was
+actually in the air. Keep it running for every future run.
