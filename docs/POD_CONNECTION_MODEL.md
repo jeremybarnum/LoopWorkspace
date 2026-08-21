@@ -152,41 +152,131 @@ instantly; each cycle briefly overlaps an old teardown with a new pending connec
 BLE slot for G7, *and* it avoids fighting the pod's own idle-disconnect. A phone has no CGM
 central competing in-process; a watch does.
 
-*(Note: `CBError 11` is a CENTRAL-side limit — the watch's own stack. A G7 serves several
-simultaneous connections; that is the founding premise of the D2W piggyback work. An earlier
-draft claimed otherwise and was wrong.)*
+### 2.3.1 The connection budget, and why an overlap costs more than one slot
+
+This is the load-bearing constraint of the whole watch design, so it is worth stating exactly,
+including where the confidence runs out.
+
+**What is documented:** watchOS allows an app roughly **two simultaneous BLE connections**
+(WWDC guidance). Sport Mode needs exactly two — pod and G7 — so we sit permanently at 100% of
+budget with no headroom.
+
+**What we measured:** with `hold-for-loan` on, the pod hung up every ~5 s (§1.8) and
+`autoReconnect` re-bid instantly. Within ~13 minutes G7 could no longer connect at all:
+`CBError 11` ("maximum number of connections"), repeating every 2 s until the pod link was
+released, after which G7 recovered on its next advertising window. Both ends of that are
+measured, and the pod ledger showed `ORPHANED=0` throughout — we were not leaking intents.
+
+**What is inferred:** that a reconnect *transiently* claims two slots — the old link not yet
+fully torn down while the new pending connect already counts. That is the only mechanism we
+can see that turns "1 pod + 1 G7 = 2" into a refusal, and it explains why the failure was a
+race that took minutes to bite rather than an immediate hard stop. **We have not proven it.**
+It could equally be that a pending connect and an established one are counted differently, or
+that the budget is smaller than two under some conditions.
+
+**Why the narrative matters even so:** the effect is not confined to our app. When our pod link
+flapped, **the G7 stopped delivering entirely** — the loop went blind with the phone away,
+which is the exact scenario Sport Mode exists for. So the budget is not a tuning parameter to
+be optimised against; it is a hard constraint, and any design that holds the pod link idle will
+eventually spend G7's slot.
+
+*(One earlier draft went further and claimed we had wedged the sensor for Dexcom's own app.
+That was wrong and is retracted: `CBError 11` is a CENTRAL-side limit — our own stack — and a
+G7 serves several simultaneous connections, which is the founding premise of the D2W piggyback
+work. Jeremy's observation of the Dexcom app also being without data in that window remains
+unexplained and uninvestigated.)*
+
+### 2.3.2 The watch's keep-alive is NOT the same thing as "foreground"
+
+Easy to conflate, and conflating them is what put the wrong gate in the driver.
+
+During a loan the watch runs an **`HKWorkoutSession`**, for a reason that has nothing to do with
+BLE: without it watchOS suspends the extension and **the loop stops running at all** — no
+cycles, no dosing, no glucose ingest. It is what makes a wrist-driven closed loop possible.
+
+`isAppForeground`, by contrast, means the user is *looking at the screen*. The two are
+independent: the keep-alive holds the app **running** for the whole loan; foreground flickers
+on and off as the wrist raises. Field data shows a 7-minute stretch with no foreground
+transition at all during an active loan.
+
+That distinction is why `shouldHoldConnection` was the wrong gate on the watch. It asks "is the
+user looking?" and answers "then hold the pod" — which on a phone means responsiveness, and on
+a watch means holding an idle link that the pod will terminate (§1.8), spending G7's slot for a
+benefit worth ~1.3 s.
+
+**And battery is explicitly NOT the constraint here.** A Sport Mode session is a 1-4 hour
+phenomenon, not all-day, and field experience across many sessions has never made battery the
+limiting factor. Do not trade away connection reliability to save power; the keep-alive already
+costs more than the radio does.
 
 ---
 
 # PART 3 — What we built
 
+**"The lean path"** = letting OmnipodKit's own connect-on-demand do the connecting, the way the
+phone does, instead of driving the radio from Sport Mode code above it. Concretely:
+`bleRunSession` adopts a `PeripheralManager` from `podState.bleIdentifier` while disconnected,
+`configureAndRun` connects on demand for the command, and the driver's idle-disconnect releases
+it. No scan, no ladder, no escalation. Everything in this Part exists either to feed that path a
+usable handle or to stop older machinery from fighting it.
+
 The watch now behaves as a **permanently-backgrounded phone**, with one deliberate exception.
 
-1. **`shouldHoldConnection` returns false on watchOS, unconditionally.** The foreground rule is
-   right for a phone and wrong here (§2.3). With it false, the driver's own **4 s
-   idle-disconnect** governs release — better than the loan layer's fixed 12 s timer, because it
-   resets per session so a status-read + dose burst shares one connection.
+1. **`shouldHoldConnection` returns false on watchOS, unconditionally** (§2.3.2). Release is then
+   governed by the driver's own **4 s idle-disconnect**, which resets per session — so a status
+   read followed by a dose shares one connection instead of paying for two.
+
+   *What this replaced:* Sport Mode had its own release timer in `PodLoanWatchController`
+   (`performPostDoseRelease`, `Lab.podReleaseDelay`, default 12 s) that orphaned the link after
+   each dose. That existed **only** to defeat the foreground hold — with `shouldHoldConnection`
+   false, the driver already releases, sooner and more precisely. That timer is now redundant and
+   is a removal candidate (Part 5).
 
 2. **A per-pod BLE handle cache** (`PodLoanBleIdentifierCache`, keyed by pod address). The watch
    already learned the right handle on adopt and then discarded it, because the pump manager is
-   rebuilt from the phone's snapshot at every grant. Now it persists.
+   rebuilt from the phone's snapshot at every grant. Now it persists across loans.
 
-3. **Handle substitution at grant intake.** The grant's `bleIdentifier` is the phone's and
-   useless here; ours goes in instead, before `OmniPumpManager` is constructed.
+   *Open UX idea:* resolve the handle once at pod-pairing time so even the first loan is instant.
+   Probably overkill — it saves ~10 s, once per pod, every three days. The cheaper answer is to
+   say so in the UI: "first time using Sport Mode with this pod — one-time setup" on that first
+   takeover, and nothing thereafter.
 
-4. **No-scan takeover** when a handle resolves, with two fallbacks: an unrecognised handle fails
-   immediately (`retrievePeripherals` returns empty) and falls through to discovery; a
-   recognised-but-unreachable one is covered by a 6 s timer, because a bare `connect()` has no
-   timeout and would otherwise hang forever.
+3. **Handle substitution at grant intake — before `OmniPumpManager` is constructed.** The timing
+   is the point: `BlePodComms.init` immediately calls `connectToDevice(uuidString:)` with
+   whatever handle it finds, so substituting *after* construction would be too late — the driver
+   would already have acted on the phone's foreign UUID, putting it in `autoConnectIDs` where it
+   can never be discovered, which pins `hasDiscoveredAllAutoConnectDevices` false and keeps the
+   radio scanning for the whole loan.
+
+4. **No-scan takeover** when a handle resolves. Three cases, only one of them common:
+
+   | case | what happens | how often |
+   |---|---|---|
+   | **no handle yet** — first loan with this pod | normal discovery scan, then the handle is cached | once per pod (~3 days) |
+   | **handle present and resolvable** | connect directly, no scan at all | every loan thereafter |
+   | **handle present but iOS no longer recognises it** — app reinstalled, pod replaced | `retrievePeripherals` returns empty *immediately*, fall through to discovery | rare |
+
+   A fourth case — handle recognised but the pod is unreachable — is the only one needing a
+   timer, because a bare `connect()` never times out and would hang forever. Hence the 6 s
+   fallback to discovery.
 
 5. **No escalation on reclaim when a handle is known.** On watchOS `escalateLoanReclaim` calls
-   `recreateCentral()`, and that was running on *every dose cycle* (see §4.3). Gentle reconnect
-   first; the ladder escalates at read 4 if it has not landed, once per ladder.
+   `recreateCentral()`, which was running on *every dose cycle* (§4.3). Gentle reconnect first;
+   the ladder escalates at read 4 if it has not landed, once per ladder.
 
-6. **A wall-clock ladder ceiling (45 s)**, because "14 reads × ~2 s" stopped being true once
-   reads became honest (§4.4).
+6. **A wall-clock ladder ceiling (45 s)**, because "14 reads × ~2 s" stopped being true once reads
+   became honest (§4.4).
 
-7. **Bounded hand-back drain and no repeated urgent-send timeouts** (§4.5, §4.6).
+7. **The hand-back stops waiting forever, and stops re-paying a timeout it has already paid.**
+   Two separate failures, both from the WCSession wedge (§4.5):
+   - *Bounded drain* — after the phone has reclaimed a loan, the watch may still be trying to
+     hand back records. It used to resend every 15 s indefinitely; it now gives up after 20
+     attempts (~5 min) and closes to idle. Safe because a drain delivers records the phone has
+     already committed.
+   - *No repeated urgent timeouts* — `sendMessage` can hang for its full 15 s while WCSession
+     claims the phone is reachable. Every retry re-chose that path and re-paid 15 s. One timeout
+     is now enough evidence; subsequent sends go straight to the queued path. This is the "End
+     feels sluggish" fix.
 
 **Nothing new was needed to USE the handle.** `BlePodComms.init` already calls
 `connectToDevice(uuidString:)` from `podState.bleIdentifier`, and `bleRunSession` already adopts
@@ -286,14 +376,40 @@ unfixed and is the largest open problem.**
 
 # PART 5 — What's left
 
+## Removal candidates, ranked by how much evidence we have
+
+The overnight run (36/36, phone off) makes several things look vestigial. Ranked by confidence,
+because "it did not fire once" is weaker evidence than it feels:
+
+| candidate | evidence | verdict |
+|---|---|---|
+| **Sport Mode's own post-dose release timer** (`performPostDoseRelease`, `Lab.podReleaseDelay`) | Structurally redundant: it existed only to defeat the foreground hold, which is now off. The driver's 4 s idle-disconnect is strictly better. | **Remove.** Argument, not just data. |
+| **`recreateCentral()`** | Fired 0 times overnight. It exists for a peripheral wedged in `.connecting`, and the churn producing those wedges was mostly ours. | **Probably remove** — but it is the recovery for a genuinely wedged stack. Wait for a few more sessions. |
+| **The reclaim ladder itself** | Ran to completion 0 times; every reclaim either found the link up or reconnected. | **Not yet.** It is now a fallback rather than a mechanism, and it is the only thing standing between an unreachable pod and a missed dose. |
+| **The read-4 mid-ladder escalation** | Fired 0 times. | **Keep for now.** It is the *only* remaining scan-adopt path — removing it removes recovery for a pod we cannot address locally, which is the case scan-adopt was originally measured on. |
+| **The 45 s ladder ceiling** | Never hit. | **Keep.** It is a cheap bound whose whole purpose is to be inactive; it exists to stop the 288 s case (§4.4) recurring. A safety bound that never fires is working. |
+
+One night with a healthy pod is not evidence that recovery paths are unnecessary — it is
+evidence that recovery was not needed *that night*. Remove the top row on the argument; make the
+rest earn it across sessions that include a dead or distant pod.
+
+## Known problems
+
 - **~30 s of self-inflicted reclaim latency.** The pod connects in 0.53 s and answers a status
   read within 8 s; then the driver's 4 s idle-disconnect drops the link out from under the
   ladder's own in-flight read, which burns its full 20 s timeout before retrying. Suppress the
-  idle-disconnect while a read is outstanding, or drop the ladder's per-read timeout to a few
-  seconds. **Latency only — 36/36 cycles still enacted.**
-- **The WCSession one-way wedge** (§4.5). Root cause unknown; both directions affected.
-- **`recreateCentral` may no longer be needed at all.** It exists for a peripheral wedged in
-  `.connecting`, and the churn producing those wedges was largely ours. It fired zero times
-  overnight. Remove it on data, not argument.
-- **The reclaim ladder itself may be removable.** It ran to completion zero times overnight;
-  every reclaim either found the link up or reconnected. It is now a fallback, not a mechanism.
+  idle-disconnect while a read is outstanding, or cut the ladder's per-read timeout to a few
+  seconds. **Latency only — 36/36 cycles still enacted.** Highest-value next fix.
+- **The WCSession one-way wedge** (§4.5). `isReachable` true, `sendMessage` times out; or offers
+  arrive and acks never do. Seen in both directions in one day. We have mitigations on the watch
+  side and **no root cause.** Largest open problem.
+- **The Dexcom app without data** during the `CBError 11` window (§2.3.1). Unexplained, and the
+  obvious check — which device it was on, and whether that device's radios were off — was never
+  made.
+
+## UX follow-ups
+
+- Name the first takeover with a new pod as one-time setup, so the ~10 s discovery reads as
+  expected rather than slow (Part 3 item 2).
+- The hand-back "ending…" state should say what it is waiting for; the transport wedge makes it
+  silent for minutes.
