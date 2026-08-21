@@ -125,3 +125,76 @@ cancelling the driver's own in-flight connects (6 of 6 cancels, fixed 2026-08-20
   should, but not yet traced end to end).
 - The overnight 180 s metronome: consistent with ordinary foreground dosing holds, but the
   RSSI gate was never applied to that sample, so it may be partly range artifact.
+
+---
+
+## 7. hold-for-loan: tested 2026-08-20, and it FAILS — keep orphaning
+
+`Lab.podReleaseDelay = -1` (never release) + `connectOnDemandEnabled = false`, radios off,
+loan epoch 149. The pod side worked perfectly: `L4 OK after 0 read(s) — link already up`,
+`enact=ok`. Then at ~20:19 the G7 died and the ring went orange.
+
+```
+20:21:10  [g7-ble] didFailToConnect DXCMqL
+          error=The system has reached the maximum number of connections   (CBError 11)
+```
+
+### Why 1 pod + 1 G7 exceeded a 2-connection budget
+
+It never held three connections steadily. **The pod hangs up on an idle held link** —
+`Code=7`, peripheral-initiated, every ~5 s:
+
+```
+20:20:07  Pod disconnected  → timedConnect → open=1
+20:20:09  Pod connected
+20:20:14  Pod disconnected (Code=7) → timedConnect → open=1
+20:20:15  Pod connected
+20:20:20  Pod disconnected (Code=7) → timedConnect → open=1
+```
+
+With connect-on-demand off, `autoReconnect` re-bids instantly, so every drop opens a window
+where the old link has not finished tearing down and a new connect is already pending —
+transiently two pod slots. G7 retries every 2 s and kept landing in those windows. The pod
+ledger stayed clean throughout (`ORPHANED=0`), so this is a race, not a leak.
+
+**Pure gets away with holding the pod because the phone's keep-alive constantly polls it**
+("the keep-alive's periodic status refresh maintains the link"). We held it with NO traffic
+between doses, and the pod terminated it. A held link needs traffic to survive.
+
+### Orphan-between-doses is load-bearing for TWO reasons
+
+Not over-engineering, as this session briefly concluded:
+1. it frees the second BLE slot for G7, and
+2. it avoids fighting the pod's own idle-disconnect.
+
+A watch cannot copy Pure's standing connection, because a phone has no G7 competing
+in-process.
+
+### The blast radius is bigger than our app
+
+Jeremy observed the **Dexcom app also lost the sensor**. A G7 accepts one connection at a
+time; hammering it with refused connects every 2 s appears to leave it holding a stale or
+half-open link that locks out every client. **Our retry storm can knock out the user's real
+Dexcom app.** That makes the slot budget a hard constraint, not a preference.
+
+### The deadlock
+
+Post-dose release only fires AFTER a dose:
+
+```
+no glucose -> no cycle -> no dose -> no post-dose release -> link never freed -> no glucose
+```
+
+It broke only because the pod hung up (`Code=7`) at 20:26:15 *after* the toggle had already
+been reverted, so `autoReconnect` no longer re-grabbed it. Had it still been off, this would
+have stayed wedged indefinitely. Recovery then took ~8 min waiting for the G7's next
+advertising window (300 s grid); glucose and backfill both landed at 20:34:37.
+
+### Queue items from this
+
+- **Release the pod link on a stale-loop condition**, not only after a successful dose.
+- **Back off the G7 retry** instead of hammering every 2 s when refused — the hammering is
+  what appears to wedge the sensor for all clients.
+- Reacquire via bare connect from a persisted per-pod `bleIdentifier` (see §6); the watch
+  currently learns its own identifier on adopt and discards it on the next grant, because
+  the manager is rebuilt from the phone's snapshot each time.
