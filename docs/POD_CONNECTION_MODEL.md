@@ -404,7 +404,37 @@ rest earn it across sessions that include a dead or distant pod.
   seconds. **Latency only — 36/36 cycles still enacted.** Highest-value next fix.
 - **The WCSession one-way wedge** (§4.5). `isReachable` true, `sendMessage` times out; or offers
   arrive and acks never do. Seen in both directions in one day. We have mitigations on the watch
-  side and **no root cause.** Largest open problem.
+  side and **no root cause.** Largest open problem — and now confirmed in production.
+
+  **CONFIRMED ON A REAL USER, APP STORE BUILD (2026-08-21, via the pure/SportMode line).**
+  Caitlin's production build 108, a TestFlight install on devices `devicectl` has never touched,
+  hit it during a 92-minute loan: a 25-minute window with **0 inbound phone→watch messages and 7
+  successful outbound**. The consequence was not cosmetic — that watch loop is glucose-triggered,
+  so with no inbound glucose **no cycle ran for 25 minutes** (no CYCLE VERDICT between 14:59 and
+  15:24) while she was descending after a genuine "very likely low in 21 mins" warning, bgAge
+  climbing past 500 s with her watching. Nothing unsafe resulted (no-change temp, IOB 0.5, floor
+  82) but it stopped looping during the window where looping mattered.
+
+  This also **refutes a hypothesis we briefly held**: that the wedge might be an artifact of
+  development installs (every occurrence on this branch had been on a `devicectl` build, and our
+  first TestFlight install of the day ran clean). It is not. Do not deprioritise it as a dev-only
+  problem. The remaining open question is the other direction — whether a `devicectl` install
+  DEGRADES a healthy App Store registration — which is still untested.
+
+  Note the port is *less* exposed than the pure line for glucose specifically, because direct-G7
+  delivers here (34/34 overnight) and can carry a loan when the relay is wedged; on her build the
+  direct client delivers **zero** and every reading comes by relay, so a wedge there is total.
+  Grants and hand-backs ride WCSession on both lines and are exposed equally.
+- **The watch app dies unexplained** — four occurrences on 2026-08-21: launches, fully
+  initialises, PAINTS UI, dies at ~2 s. Not a startup crash (it renders), not jetsam (it gets that
+  far), not auto-relaunched (stays dead until tapped). No `.ips` in the app container. Note the
+  log's clean endings are NOT a truncated tail — `SportLog.append` does a real `write` + `close`
+  per line, so the loss window is milliseconds; the silence is a genuinely idle app. What we lack
+  is the ability to distinguish IDLE from DEAD in our own log (a periodic heartbeat would fix
+  that), and a captured system termination record — `os_log` output survives death and a
+  sysdiagnose should carry it, but the one on-demand reproduction we had was wasted on a
+  malformed `devicectl diagnose` invocation (`--device` vs `--devices`).
+
 - **The watch stops receiving the sensor entirely — D2W included.** (Jeremy, 2026-08-21,
   superseding the earlier "which device was it" hedge: D2W is the Dexcom WATCH app, phone-
   independent, so this is a watch-side, system-level observation.) Precise symptom: start a
