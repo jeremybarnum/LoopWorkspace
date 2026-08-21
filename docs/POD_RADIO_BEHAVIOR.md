@@ -170,12 +170,21 @@ Not over-engineering, as this session briefly concluded:
 A watch cannot copy Pure's standing connection, because a phone has no G7 competing
 in-process.
 
-### The blast radius is bigger than our app
+### RETRACTED: the "we wedged the sensor" claim
 
-Jeremy observed the **Dexcom app also lost the sensor**. A G7 accepts one connection at a
-time; hammering it with refused connects every 2 s appears to leave it holding a stale or
-half-open link that locks out every client. **Our retry storm can knock out the user's real
-Dexcom app.** That makes the slot budget a hard constraint, not a preference.
+An earlier revision of this section claimed a G7 accepts one connection at a time and that
+our retry storm locked out the Dexcom app. **That is wrong and contradicts this project's
+founding result** — the D2W piggyback works precisely BECAUSE the sensor serves several
+simultaneous connections (phone + watch + our stack). See the piggyback work.
+
+`CBError 11` is a **central-side** limit — the watch's own BLE stack ran out of connection
+slots. It says nothing about what the sensor will accept, and gives no basis for a claim
+about other apps' access to it.
+
+Jeremy did observe the Dexcom app without data during this window; that is unexplained and
+was NOT investigated. The obvious candidate was never checked: which device that app was on,
+and whether that device's radios were off at the time. Do not treat it as evidence of
+anything until someone actually looks.
 
 ### The deadlock
 
