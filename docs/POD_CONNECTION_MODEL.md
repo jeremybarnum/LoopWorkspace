@@ -72,7 +72,7 @@ silence longer than the measurement floor is somebody's connection window.
 
 ## 1.6 The pod's natural rhythm
 
-Clean room (loan ended, both apps quit, both radios off, one hour, close range):
+**JB this needs more definition - what does clean room mean, and what are essentially the titles of each of the columns.  I think you're saying that that the first column is something like "windows of unavailability" or "pod not reachable". ** Clean room (loan ended, both apps quit, both radios off, one hour, close range):
 
 ```
   0-2s   43.9%      10-30s   1.8%
@@ -108,6 +108,8 @@ survive. This is the fact that decides the whole design below.
 # PART 2 — The two connection models, and why the watch differs
 
 ## 2.1 Pure (`SportMode`) — standing connection, four lines
+
+**JB for the purposes of this document I think we need to move away from "pure" to refer to the various branches.  it's basically current dev, and next dev, and our sport mode implementations on each code base.  Let's refer to them accordingly**
 
 ```swift
 if autoConnectIDs.contains(peripheral.identifier.uuidString) {
@@ -403,9 +405,23 @@ rest earn it across sessions that include a dead or distant pod.
 - **The WCSession one-way wedge** (§4.5). `isReachable` true, `sendMessage` times out; or offers
   arrive and acks never do. Seen in both directions in one day. We have mitigations on the watch
   side and **no root cause.** Largest open problem.
-- **The Dexcom app without data** during the `CBError 11` window (§2.3.1). Unexplained, and the
-  obvious check — which device it was on, and whether that device's radios were off — was never
-  made.
+- **The watch stops receiving the sensor entirely — D2W included.** (Jeremy, 2026-08-21,
+  superseding the earlier "which device was it" hedge: D2W is the Dexcom WATCH app, phone-
+  independent, so this is a watch-side, system-level observation.) Precise symptom: start a
+  loan; the phone leaves (Faraday cage, radios off, powered off, or plain distance — the
+  mechanism of departure does not matter); after **~15 minutes** BG stops flowing to our app
+  AND to D2W. Two independent apps on one shared radio going dark together means the failure
+  is below the app layer. The ~15-minute onset is the diagnostic signature: a static budget
+  problem would bite immediately, so this looks like **accumulation** — something held or
+  leaked per reclaim/G7 cycle (~3 cycles ≈ 15 min) until the watch's TOTAL connection budget
+  is exhausted and the system can open no new links for anyone. The phone's role is
+  topological, not causal: with it present the sensor's primary collector is the phone; with
+  it gone, all sensor traffic concentrates on the watch. Consistent with the hold-for-loan
+  `CBError 11` event and with the old "G7 self-recovers ~25 min after takeover" observation —
+  recovery-by-timeout is what a leaked resource aging out looks like.
+  **Test when a sensor exists:** reproduce with phone departed, and watch the intent ledger,
+  `devices` count, and G7 connection events across the 15 minutes to see what accumulates;
+  simultaneously check D2W on the wrist so its failure is timestamped, not recalled.
 
 ## UX follow-ups
 
