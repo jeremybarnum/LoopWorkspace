@@ -302,6 +302,39 @@ median gap between cycles  301s
 
 Kept because each has a *signature*, and recognising the signature is most of the fix.
 
+## Result — bench 2026-08-23, build 1085: the reclaim fix validated on hardware
+
+The reclaim-latency fix shipped 2026-08-20 and, until today, had **never run on hardware** —
+two prior attempts at the second leg died to app relaunches. Both legs now measured, one loan,
+new pod (`177E6B7F`), phone present:
+
+| leg | reps | reclaim times | median |
+|---|---|---|---|
+| idle 0 s | 5 | 5.0 · 10.8 · 13.7 · 10.2 · 15.1 s | ~10.8 s |
+| idle 300 s (cold pod) | 3 | 12.3 · 10.9 · 9.3 s | ~10.9 s |
+| **old code, for comparison** | — | — | **~30.5 s** |
+
+**~3× faster, and idle time is irrelevant.** A pod left alone 5 minutes — past its ~3-minute
+self-disconnect, fully cold — reclaims exactly as fast as one released seconds ago. The residual
+~10 s is entirely our own read-starvation overhead, not the pod's state. The 2×2 experiment is
+closed (the old-code cold cell died twice and is now moot).
+
+Health counters across both legs: **0 orphaned `PeripheralManager`, 0 `central=nil`, 0
+escalations** (6 × `NO escalate`), 0 ladder abandonments, 4/4 loop cycles enacted, no app deaths.
+
+**The residual is structurally rigid, which is the useful finding.** Every reclaim in both legs
+was *exactly* "read 1 starves, read 2 succeeds" — 2 reads, ~10 s — with one 5 s exception in 8
+ladders. It is not a distribution; it is a constant. Read 1 waits on a superseded
+`PeripheralManager` for the full 6 s watchdog (it was 20 s before the watchdog, which is the
+entire 30 s → 10 s win), then read 2 lands on the current object. **The lean rewrite — reads
+themselves drive the connect, no parallel path creating object swaps — removes the cause and
+takes every reclaim to ~5 s.** That is now the only thing between us and the floor.
+
+First field sighting of `g7pending=`: the G7 client parks a pending connect for **299 s** at a
+stretch between deliveries. It blocked nothing here (pod + one pending G7 = exactly the 2-slot
+watchOS budget) but it is why the budget has zero headroom, and the likely fuel for the `#11`
+bursts seen at acquisition (5 refused connects in 3 s, 15:09).
+
 ## 4.1 We were cancelling our own connects
 
 **Signature:** `cancelled:disconnectOnDemand`, 6 of 6, at 0.36–1.87 s against a ~1.3 s connect.
