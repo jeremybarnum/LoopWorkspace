@@ -365,6 +365,44 @@ unfixed and is the largest open problem.**
 - **A comment claiming a fallback existed** when there was exactly one call site, which had just
   been gated.
 
+## 4.65 The cb: connect clock was never wired (instrument correction)
+
+`PodLoanConnectClock` — the independent clock that stamps CoreBluetooth's own
+didConnect/didDisconnect/didFailToConnect so ladder polling can be checked against ground truth
+— was ported with its three `note*` entry points and **zero call sites**. Every `cb:` field this
+branch ever logged read `didConnect never (n=0)` structurally, not observationally.
+
+**Treat every pre-2026-08-22 `cb:` field in this branch's logs as void.** Conclusions that
+leaned on them survive only where the intent ledger (a separate, correctly-wired system)
+corroborated. Wired 2026-08-22; from then on the trail, `lastFail=CBErrorDomain#N`, and the
+wedge signature below are real.
+
+## 4.66 Force-quit strands SYSTEM-level pending connects (peer-measured; remedy shipped)
+
+From the pure/SportMode line's field session (real user, App Store build): CoreBluetooth
+connect requests live in bluetoothd, not in the app — a force-quit mid-retry leaves pending
+connects **no living process can cancel**. Slots stay consumed and the radio goes progressively
+blinder: takeover refused with `#11` while the pod advertised beside it → user force-quit and
+retried (the natural response) → next ladder heard ZERO adverts in 108 s while the phone
+reconnected to the same pod in 6.6 s. Each round worsened it. **A watch Bluetooth toggle
+flushed it** — first-try success after.
+
+Consequence shipped here (2026-08-22): the takeover-failure message now branches on a **wedge
+signature** — any `#11` during the attempt, or an attempt in which no connect ever landed
+(the pod is known-present at takeover; the phone released it seconds ago) — and a wedged
+failure says *toggle watch Bluetooth*, because "try again" actively feeds this failure mode.
+The signature is deliberately NOT surfaced on reclaim failures, where a quiet pod also
+produces zero connects; there the raw `lastFail=` field carries the evidence instead.
+
+Takeover read lines now also carry `g7pending=` — a `#11` cannot name its holder from the pod
+central's census (the G7 client is a separate CBCentralManager), and a pending G7 connect is
+the usual suspect for the missing slot.
+
+**The real fix — cancelling orphaned connects for known pod+G7 identifiers at launch and
+teardown — is deliberately NOT built here yet.** The pure line is building it fresh; the port
+takes it after it has field time. Cancelling at launch touches every reconnect flow and has no
+bench coverage without hardware.
+
 ## 4.7 Measurement traps
 
 - **RSSI is a validity gate.** One run showed 52% "silence" at median −96 dBm and 0% at −41 dBm.
