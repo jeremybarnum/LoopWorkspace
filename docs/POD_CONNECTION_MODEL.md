@@ -331,9 +331,15 @@ themselves drive the connect, no parallel path creating object swaps — removes
 takes every reclaim to ~5 s.** That is now the only thing between us and the floor.
 
 First field sighting of `g7pending=`: the G7 client parks a pending connect for **299 s** at a
-stretch between deliveries. It blocked nothing here (pod + one pending G7 = exactly the 2-slot
-watchOS budget) but it is why the budget has zero headroom, and the likely fuel for the `#11`
-bursts seen at acquisition (5 refused connects in 3 s, 15:09).
+stretch between deliveries. **This is NORMAL, not pathology** (pure-line triage, 2026-08-23):
+the standing pending connect IS the piggyback mechanism — `connectPeripheral` waiting for the
+sensor's next window is how triggers a/b work. Do not "fix" it. The pathological cases are
+(1) an ORPHANED pending from a dead process, with no living owner, and (2) the budget
+arithmetic it implies: G7-pending (1 slot, near-always) + pod link (1 slot during dose windows)
+= routine zero headroom, so any third connect — a takeover retry, an orphan — tips into `#11`
+(the 5-refused-in-3 s burst at acquisition, 15:09). Consequence for any cancel-stale-connects
+fix: scope it to the POD identifier only — cancelling the G7 standing pending kills
+acquisition; the G7 manager re-issues its own connect fresh.
 
 ## 4.1 We were cancelling our own connects
 
