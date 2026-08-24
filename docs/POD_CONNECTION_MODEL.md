@@ -442,6 +442,31 @@ teardown — is deliberately NOT built here yet.** The pure line is building it 
 takes it after it has field time. Cancelling at launch touches every reconnect flow and has no
 bench coverage without hardware.
 
+## 4.67 TWO wedges, TWO remedies — never cross-contaminate the guidance
+
+There are two distinct "it's wedged, toggle something" failure classes, and giving one's
+remedy for the other wastes a stranded user's time (pure-line triage 2026-08-23, their
+WCSESSION_7006_BRIEF @ 520eebd6 carries the full table; this is the mirror):
+
+| | BLE orphan wedge | WC transport wedge |
+|---|---|---|
+| signature | `#11` refusals / ladder-never-connects on the POD link; adverts go quiet | grants/acks vanish one-way; `isWatchAppInstalled=false` with the app present; #113/#108 fire |
+| lives in | bluetoothd slot bookkeeping (orphaned pending connects) | the PHONE's WCSession daemon |
+| remedy | **watch Bluetooth toggle** — field-proven first-try; the launch reap (§ below) now automates the same cleanup | **phone-side reset** (reboot; historically a TestFlight install also cleared it). Watch-side actions do NOT touch it — proven 2026-08-23: toggles, force-quits, and a watch reboot all failed against it |
+| our message | takeover-failure wedge branch (BLE signature only) | #113 request-timeout / #108 grant-unconfirmed |
+
+Evidence for the phone-daemon locus: four stereo-logged occurrences in one evening
+(watch→phone alive, phone→watch dead, every watch-side remedy failed), plus the pure line's
+8/17 case that survived force-quitting BOTH apps and cleared only on a phone-side event.
+Candidate trigger, first ever logged: the phone's clock stepping BACKWARDS (in-flight time
+re-sync) — bench-reproducible via airplane mode + manual clock change, untested.
+
+Nuance on `appInstalled=false` alone: Jeremy's earlier occurrences cleared with a watch BT
+toggle, so the flag by itself does not decide the class — transient flag-flaps ride install
+churn and recover watch-side; the TRANSPORT wedge is the persistent one-way case. The glitch
+notice keeps the watch-toggle advice as first-line; escalate to the phone-side remedy when
+the one-way signature (#113/#108) is present or the toggle fails.
+
 ## 4.7 Measurement traps
 
 - **RSSI is a validity gate.** One run showed 52% "silence" at median −96 dBm and 0% at −41 dBm.
