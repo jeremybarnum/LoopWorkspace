@@ -404,6 +404,28 @@ unfixed and is the largest open problem.**
 - **A comment claiming a fallback existed** when there was exactly one call site, which had just
   been gated.
 
+## 4.64 Keepalive grants RUNNABILITY, not execution (overnight soak 2026-08-25)
+
+An HKWorkoutSession keepalive does not mean the app runs — it means the app MAY run when
+events arrive. Proven by starvation: phone radios off, watch/pod/sensor all at range, loan
+active, keepalive held (`keepalive running(soak)` in every gap line), battery 100% — and the
+app executed roughly ONCE AN HOUR (the OS allowance), then not at all for 5.8 hours. No kill,
+no relaunch: the same process woke at 06:08 with `GAP 20922s`. Every prior soak had at least
+one radio delivering events, which is why this was never visible.
+
+Consequences, all of which held: dosing safety is the POD's own property (temp runs to its
+programmed end, then scheduled basal — no radio required); loan/epoch state survives arbitrary
+suspension (one epoch crossed the whole coma and reconciled to a clean ledger); and alerting
+must come from OUTSIDE the process — which is why the dead-man rungs are pre-scheduled
+UNNotifications.
+
+**OPEN (top of the list): the from-suspension rung delivery is unverified.** The 20-minute
+rung fired on schedule when the app had runtime (faraday, 2026-08-24), but after the fully
+dark night no Loop Failure notifications were found on the watch face. Either they fired
+unnoticed and were lost, or deep suspension / sleep Focus / a workout-session interaction
+suppressed them — different bugs, one decisive test: stall the loop, touch NOTHING for 25+
+minutes, then read the watch's notification center.
+
 ## 4.65 The cb: connect clock was never wired (instrument correction)
 
 `PodLoanConnectClock` — the independent clock that stamps CoreBluetooth's own
