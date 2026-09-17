@@ -151,9 +151,38 @@ SIM_ID="70631DFE-9079-4EE5-B541-14CB75F280C5"   # "Port-NextDev" — THIS line's
 # the first attempt's failures — i.e. a green retry still prints failures, which is exactly
 # the kind of lying output that gets a gate distrusted.
 RUNLOG="$OUT/.gate-run.log"
+
+# SIMULATORS THE GATES NEED, BOOTED AND READY.
+#
+# Every retry below runs `simctl shutdown all`, and nothing ever booted one again — so a retry
+# launched against a shut-down simulator and hung exactly as the first attempt had. That is why
+# runner hangs have always come in PAIRS: two per gate attempt, ~13 min each, in every run on
+# 2026-09-17. Boot before each run and WAIT (`bootstatus -b`), so a retry is a real second
+# attempt rather than a guaranteed second hang.
+ready_sims() {
+  xcrun simctl boot "$SIM_ID" >/dev/null 2>&1 || true
+  xcrun simctl boot "$WATCH_SIM_ID" >/dev/null 2>&1 || true
+  xcrun simctl bootstatus "$SIM_ID" -b >/dev/null 2>&1 || true
+  xcrun simctl bootstatus "$WATCH_SIM_ID" -b >/dev/null 2>&1 || true
+}
+
+# xcodebuild waits ~13 minutes for a test runner that will never connect. The gates take ~100 s
+# and ~50 s green, so anything past GATE_TIMEOUT is the hang, not a slow machine: kill it and let
+# the caller's retry (which now boots first) have the time instead.
+GATE_TIMEOUT=${GATE_TIMEOUT:-300}
+run_under_watchdog() {   # run_under_watchdog <pid-of-backgrounded-job>
+  local xpid=$1 rc=0
+  ( sleep "$GATE_TIMEOUT"; kill -TERM "$xpid" 2>/dev/null ) &
+  local dog=$!
+  wait "$xpid" || rc=$?
+  kill "$dog" 2>/dev/null || true
+  return $rc
+}
+
 run_test_gate() {
   : > "$RUNLOG"
   local rc=0
+  ready_sims
   xcodebuild \
     -workspace "$ROOT/LoopWorkspace.xcworkspace" \
     -scheme LoopWorkspace \
@@ -170,7 +199,8 @@ run_test_gate() {
     -only-testing:LoopTests/WatchOverrideDosingTests \
     -only-testing:LoopTests/LoanTwoSidedContractTests \
     -only-testing:LoopTests/ICEInvalidationTests \
-    >>"$RUNLOG" 2>&1 || rc=$?
+    >>"$RUNLOG" 2>&1 &
+  run_under_watchdog $! || rc=$?
   cat "$RUNLOG" >> "$LOG"
   return $rc
 }
@@ -206,6 +236,7 @@ run_watch_gate() {
     return 68
   fi
   local rc=0
+  ready_sims
   xcodebuild \
     -workspace "$ROOT/LoopWorkspace.xcworkspace" \
     -scheme WatchAppTests \
@@ -213,7 +244,8 @@ run_watch_gate() {
     -derivedDataPath "$BASE/.dd-watchtests" \
     ONLY_ACTIVE_ARCH=YES \
     test \
-    >>"$WATCH_RUNLOG" 2>&1 || rc=$?
+    >>"$WATCH_RUNLOG" 2>&1 &
+  run_under_watchdog $! || rc=$?
   cat "$WATCH_RUNLOG" >> "$LOG"
   return $rc
 }
@@ -298,7 +330,7 @@ else
         print -- "$(date '+%Y-%m-%d %H:%M:%S') $(failing_tests | tr '\n' ' ')" >> "$OUT/flake-tally.log"
         note "  flake occurrences recorded to date: $(wc -l < "$OUT/flake-tally.log" | tr -d ' ') (tally: $OUT/flake-tally.log)"
         note "  If this rate climbs, STOP retrying and fix the mechanism (#103 / #125)."
-        xcrun simctl shutdown all >/dev/null 2>&1 || true
+        xcrun simctl shutdown all >/dev/null 2>&1 || true; ready_sims
         if ! run_test_gate; then
           note "TEST GATE FAILED ON RETRY — NOT archiving. This is NOT the flake:"
           print -- "$(gate_assertions)"
@@ -319,7 +351,7 @@ else
       note "No assertion failures — looks like the simulator, not your code:"
       grep -A3 "^Testing failed:" "$RUNLOG" | tail -6 || true
       note "Retrying once after shutting the simulators down..."
-      xcrun simctl shutdown all >/dev/null 2>&1 || true
+      xcrun simctl shutdown all >/dev/null 2>&1 || true; ready_sims
       if ! run_test_gate; then
         note "TEST GATE FAILED on retry — NOT archiving."
         if [[ -n "$(gate_assertions)" ]]; then
@@ -348,7 +380,7 @@ else
     fi
     note "No assertion failures — looks like the simulator, not your code. Retrying once..."
     grep -A3 "^Testing failed:" "$WATCH_RUNLOG" | tail -6 || true
-    xcrun simctl shutdown all >/dev/null 2>&1 || true
+    xcrun simctl shutdown all >/dev/null 2>&1 || true; ready_sims
     if ! run_watch_gate; then
       note "WATCH GATE FAILED on retry — NOT archiving."
       print -- "$(watch_gate_assertions)"
