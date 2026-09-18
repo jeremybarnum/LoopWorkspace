@@ -392,6 +392,19 @@ else
   note "WATCH GATE ok — $(grep -oE 'Executed [0-9]+ tests, with [0-9]+ failures' "$WATCH_RUNLOG" | tail -1 || true)"
 fi
 
+# RETENTION. Each archive is ~820 MB and nothing ever removed one: 396 of them, 58 GB, had
+# accumulated by 2026-09-17, and the volume reached 403 MB free. A full disk does not announce
+# itself — the simulator simply cannot install the app, and the gate reports "test runner hung
+# before establishing connection", which is what most of that day's lost hours actually were.
+# Keep the most recent ARCHIVE_KEEP (the shipped build and a few to fall back to); prune BEFORE
+# building so the space is free when it is needed.
+ARCHIVE_KEEP=${ARCHIVE_KEEP:-5}
+pruned=0
+for old_archive in $(ls -dt "$OUT"/Loop-*.xcarchive 2>/dev/null | tail -n +$((ARCHIVE_KEEP + 1))); do
+  rm -rf "$old_archive" && pruned=$((pruned + 1))
+done
+(( pruned > 0 )) && note "ARCHIVE retention: removed $pruned old archive(s), keeping the newest $ARCHIVE_KEEP ($(df -h /System/Volumes/Data | tail -1 | awk '{print $4}') free)"
+
 note "ARCHIVE starting (LoopWorkspace scheme, Release) — the long step; log: $LOG"
 caffeinate -is xcodebuild \
   -workspace "$ROOT/LoopWorkspace.xcworkspace" \
