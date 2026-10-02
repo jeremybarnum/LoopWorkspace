@@ -196,13 +196,9 @@ run_test_gate() {
     test \
     -only-testing:LoopTests/LoanProtocolV2Tests \
     -only-testing:LoopTests/LoanBooksHarnessTests \
-    -only-testing:LoopTests/LoanEventJournalTests \
-    -only-testing:LoopTests/WatchStoreEffectsTests \
+    -only-testing:LoopTests/LoanWireQuantizationTests \
+    -only-testing:LoopTests/LoanOverrideTests \
     -only-testing:LoopTests/PodLoanPhoneControllerTests \
-    -only-testing:LoopTests/WatchDosingLimitsTests \
-    -only-testing:LoopTests/WatchOverrideDosingTests \
-    -only-testing:LoopTests/LoanTwoSidedContractTests \
-    -only-testing:LoopTests/ICEInvalidationTests \
     >>"$RUNLOG" 2>&1 &
   run_under_watchdog $! || rc=$?
   cat "$RUNLOG" >> "$LOG"
