@@ -200,6 +200,7 @@ run_test_gate() {
     -only-testing:LoopTests/LoanOverrideTests \
     -only-testing:LoopTests/PodLoanPhoneControllerTests \
     -only-testing:LoopTests/LoanDosingDecisionTests \
+    -only-testing:LoopTests/LoanHistoryIntakeTests \
     >>"$RUNLOG" 2>&1 &
   run_under_watchdog $! || rc=$?
   cat "$RUNLOG" >> "$LOG"
