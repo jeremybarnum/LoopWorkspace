@@ -1,5 +1,4 @@
 {
-  "originHash" : "3074fb13e969eeb07af13d2659671d107eac739de84ccaff57f73a4b6201e10f",
   "pins" : [
     {
       "identity" : "amplitude-ios",
@@ -163,15 +162,6 @@
       }
     },
     {
-      "identity" : "tidepoolkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/tidepool-org/TidepoolKit",
-      "state" : {
-        "branch" : "dev",
-        "revision" : "290bd0431c55e8d0e0e542b163de13b1f07b77d9"
-      }
-    },
-    {
       "identity" : "zipfoundation",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/LoopKit/ZIPFoundation.git",
@@ -180,5 +170,5 @@
       }
     }
   ],
-  "version" : 3
+  "version" : 2
 }
