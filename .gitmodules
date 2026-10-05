@@ -15,7 +15,7 @@
 	url = https://github.com/jeremybarnum/rileylink_ios
 [submodule "NightscoutService"]
 	path = NightscoutService
-	url = https://github.com/LoopKit/NightscoutService.git
+	url = https://github.com/jeremybarnum/NightscoutService.git
 [submodule "Minizip"]
 	path = Minizip
 	url = https://github.com/LoopKit/Minizip.git
@@ -42,7 +42,7 @@
 	url = https://github.com/jeremybarnum/G7SensorKit.git
 [submodule "TidepoolService"]
 	path = TidepoolService
-	url = https://github.com/LoopKit/TidepoolService.git
+	url = https://github.com/jeremybarnum/TidepoolService.git
 [submodule "MinimedKit"]
 	path = MinimedKit
 	url = https://github.com/LoopKit/MinimedKit.git
@@ -73,3 +73,7 @@
 	path = MedtrumKit
 	url = https://github.com/LoopKit/MedtrumKit.git
 	branch = next-dev
+[submodule "TidepoolKit"]
+	path = TidepoolKit
+	url = https://github.com/jeremybarnum/TidepoolKit.git
+	branch = sportmode/watchos
