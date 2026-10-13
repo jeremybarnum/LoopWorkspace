@@ -32,17 +32,9 @@ jobs:
 
       - name: Checkout Repo
         uses: actions/checkout@v5
-
-      # LibreCRKit's upstream (airedev326/LibreCRKit) is gone; it is only listed in the
-      # workspace and not built by the LoopWorkspace scheme, so skip it.
-      - name: Checkout submodules
-        env:
-          TOKEN: ${{ secrets.GH_PAT || github.token }}
-        run: |
-          git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
-          git submodule init
-          git config submodule.LibreCRKit.update none
-          git submodule update --depth 1 --recursive --jobs 8
+        with:
+          token: ${{ secrets.GH_PAT || github.token }}
+          submodules: recursive
 
       # Same patches the TestFlight build applies, so we test what ships
       - name: Apply patches
@@ -72,6 +64,11 @@ jobs:
             -derivedDataPath DerivedData \
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee build.log | xcbeautify --quiet --renderer github-actions
+
+      # xcbeautify --quiet drops the context around some failures (e.g. package resolution)
+      - name: Show build errors
+        if: failure() && hashFiles('build.log') != ''
+        run: grep -n -E -B2 -A6 "error:|fatal error|BUILD FAILED" build.log | head -300
 
       - name: Run tests
         if: github.event_name == 'push' || inputs.run_tests
