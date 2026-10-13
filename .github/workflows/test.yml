@@ -32,9 +32,17 @@ jobs:
 
       - name: Checkout Repo
         uses: actions/checkout@v5
-        with:
-          token: ${{ secrets.GH_PAT || github.token }}
-          submodules: recursive
+
+      # LibreCRKit's upstream (airedev326/LibreCRKit) is gone; it is only listed in the
+      # workspace and not built by the LoopWorkspace scheme, so skip it.
+      - name: Checkout submodules
+        env:
+          TOKEN: ${{ secrets.GH_PAT || github.token }}
+        run: |
+          git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
+          git submodule init
+          git config submodule.LibreCRKit.update none
+          git submodule update --depth 1 --recursive --jobs 8
 
       # Same patches the TestFlight build applies, so we test what ships
       - name: Apply patches
