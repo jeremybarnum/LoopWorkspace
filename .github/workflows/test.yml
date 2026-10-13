@@ -2,7 +2,9 @@ name: Build and Test
 run-name: Build and Test (${{ github.ref_name }})
 
 # Compiles the LoopWorkspace scheme for the iOS Simulator and runs its unit tests.
-# No signing, no secrets beyond GH_PAT for submodule checkout, no TestFlight upload.
+# Ad-hoc ("Sign to Run Locally") signing only, so test hosts get their entitlements
+# (HealthKit, app groups) without certificates. No secrets beyond GH_PAT for submodule
+# checkout, no TestFlight upload.
 # DEVELOPMENT_TEAM is a placeholder so every target's com.$(DEVELOPMENT_TEAM).loopkit
 # bundle ID agrees (some targets hard-code a team, others rely on signing to set it).
 on:
@@ -64,7 +66,9 @@ jobs:
             -scheme LoopWorkspace \
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -derivedDataPath DerivedData \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY=- \
+            PROVISIONING_PROFILE_SPECIFIER= \
             DEVELOPMENT_TEAM=CI00000000 \
             2>&1 | tee build.log | xcbeautify --quiet --renderer github-actions
 
