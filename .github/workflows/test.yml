@@ -1,0 +1,100 @@
+name: Build and Test
+run-name: Build and Test (${{ github.ref_name }})
+
+# Compiles the LoopWorkspace scheme for the iOS Simulator and runs its unit tests.
+# No signing, no secrets beyond GH_PAT for submodule checkout, no TestFlight upload.
+on:
+  push:
+    branches:
+      - SportMode-next-dev
+  workflow_dispatch:
+    inputs:
+      run_tests:
+        description: "Run tests after building (uncheck for a compile-only check)"
+        type: boolean
+        default: true
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and Test
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - name: Select Xcode version
+        run: "sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer"
+
+      - name: Ensure xcbeautify
+        run: command -v xcbeautify || brew install xcbeautify
+
+      - name: Checkout Repo
+        uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.GH_PAT || github.token }}
+          submodules: recursive
+
+      # Same patches the TestFlight build applies, so we test what ships
+      - name: Apply patches
+        run: |
+          if $(ls ./patches/*.patch &> /dev/null); then
+            git apply ./patches/*.patch --allow-empty -v --whitespace=fix
+          fi
+
+      - name: Pick simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j \
+            | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))] | last | .udid')
+          if [ -z "$UDID" ] || [ "$UDID" = "null" ]; then
+            echo "No iPhone simulator available"; xcrun simctl list devices available; exit 1
+          fi
+          xcrun simctl list devices available | grep "$UDID"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Build for testing
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -workspace LoopWorkspace.xcworkspace \
+            -scheme LoopWorkspace \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build.log | xcbeautify --quiet --renderer github-actions
+
+      - name: Run tests
+        if: github.event_name == 'push' || inputs.run_tests
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -workspace LoopWorkspace.xcworkspace \
+            -scheme LoopWorkspace \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath DerivedData \
+            -resultBundlePath TestResults.xcresult \
+            2>&1 | tee test.log | xcbeautify --renderer github-actions
+
+      - name: Test summary
+        if: always() && hashFiles('TestResults.xcresult/**') != ''
+        run: |
+          xcrun xcresulttool get test-results summary --path TestResults.xcresult --compact > summary.json || exit 0
+          {
+            echo "## Test results"
+            jq -r '"**\(.result)** — \(.passedTests) passed, \(.failedTests) failed, \(.skippedTests) skipped"' summary.json
+            jq -r '.testFailures[]? | "- `\(.targetName)` \(.testName): \(.failureText)"' summary.json
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload logs and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output
+          path: |
+            build.log
+            test.log
+            TestResults.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
