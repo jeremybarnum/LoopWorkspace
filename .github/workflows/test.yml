@@ -3,6 +3,8 @@ run-name: Build and Test (${{ github.ref_name }})
 
 # Compiles the LoopWorkspace scheme for the iOS Simulator and runs its unit tests.
 # No signing, no secrets beyond GH_PAT for submodule checkout, no TestFlight upload.
+# DEVELOPMENT_TEAM is a placeholder so every target's com.$(DEVELOPMENT_TEAM).loopkit
+# bundle ID agrees (some targets hard-code a team, others rely on signing to set it).
 on:
   push:
     branches:
@@ -63,6 +65,7 @@ jobs:
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -derivedDataPath DerivedData \
             CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM=CI00000000 \
             2>&1 | tee build.log | xcbeautify --quiet --renderer github-actions
 
       # xcbeautify --quiet drops the context around some failures (e.g. package resolution)
@@ -80,6 +83,7 @@ jobs:
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -derivedDataPath DerivedData \
             -resultBundlePath TestResults.xcresult \
+            DEVELOPMENT_TEAM=CI00000000 \
             2>&1 | tee test.log | xcbeautify --renderer github-actions
 
       - name: Test summary
