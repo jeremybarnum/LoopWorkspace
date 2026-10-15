@@ -73,3 +73,7 @@
 [submodule "RoundWhiteDiscKit"]
 	path = RoundWhiteDiscKit
 	url = https://github.com/airedev326/RoundWhiteDiscKit.git
+[submodule "TidepoolKit"]
+	path = TidepoolKit
+	url = https://github.com/jeremybarnum/TidepoolKit.git
+	branch = sportmode/watchos
