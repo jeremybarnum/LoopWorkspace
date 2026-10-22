@@ -1,0 +1,28 @@
+name: Sim bench
+run-name: Sim bench (${{ inputs.tests || 'quick' }} on ${{ github.ref_name }})
+
+# Sport Mode's bench tests in paired iPhone and Watch Simulators on a GitHub macOS runner, for the
+# branch it is started on: jeremybarnum/sportmode-sim sets up the simulated pod and sensor, builds
+# that commit's apps with the Simulator aids, onboards the phone, and runs tests/run.sh.
+# Only on request (Run workflow, or the API): an hour of runner time is not spent on every push.
+on:
+  workflow_dispatch:
+    inputs:
+      tests:
+        description: "Tests for tests/run.sh: names (T1 T3), quick (T1 T5 T13), or all"
+        default: quick
+      time_scale:
+        description: TIME_SCALE for the run
+        default: "5"
+      harness_ref:
+        description: sportmode-sim branch to run it with
+        default: cloud-ci
+
+jobs:
+  bench:
+    uses: jeremybarnum/sportmode-sim/.github/workflows/cloud-bench.yml@cloud-ci
+    with:
+      workspace_ref: ${{ github.sha }}
+      tests: ${{ inputs.tests || 'quick' }}
+      time_scale: ${{ inputs.time_scale || '5' }}
+      harness_ref: ${{ inputs.harness_ref || 'cloud-ci' }}
