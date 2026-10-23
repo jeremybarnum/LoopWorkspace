@@ -27,3 +27,6 @@ xcuserdata/
 *.playground
 playground.xcworkspace
 timeline.xctimeline
+
+## Sport Mode: the APNs key, written by ops/push/install-push-key.sh (never committed)
+SportModePush.local.xcconfig
