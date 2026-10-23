@@ -30,3 +30,5 @@ timeline.xctimeline
 
 ## Sport Mode: the APNs key, written by ops/push/install-push-key.sh (never committed)
 SportModePush.local.xcconfig
+## Sport Mode bench-only build settings (never committed, never in her builds)
+SportModeBench.local.xcconfig
