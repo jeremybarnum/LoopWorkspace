@@ -271,8 +271,56 @@ public enum OrefError: Error, CustomStringConvertible {
 }
 
 public enum Oref {
+    /// Everything one cycle computes on the way to its determination, for tests and reference runs.
+    struct Run {
+        var profile: Profile
+        var preferences: Preferences
+        var pumpHistory: [PumpHistoryEvent]
+        var glucose: [BloodGlucose]
+        var carbs: [CarbsEntry]
+        var autosens8h: Autosens
+        var autosens24h: Autosens
+        var autosens: Autosens
+        var meal: ComputedCarbs
+        var iob: [IobResult]
+        var currentTemp: TempBasal
+        var customVariables: TrioCustomOrefVariables
+        var determination: Determination
+        var dynamicISFSkipped: Bool
+    }
+
     /// Runs one oref cycle the way Trio does (Trio `OpenAPS.swift`): profile, autosens, meal, IOB, determine-basal.
     public static func determine(_ input: OrefInput) throws -> OrefOutput {
+        let computed = try run(input)
+        let determination = computed.determination
+
+        func d(_ value: Decimal?) -> Double? { value.map { NSDecimalNumber(decimal: $0).doubleValue } }
+        return OrefOutput(
+            date: input.now,
+            unitsPerHour: d(determination.rate),
+            durationMinutes: d(determination.duration),
+            microBolus: d(determination.units).flatMap { $0 > 0 ? $0 : nil },
+            reason: determination.reason,
+            eventualBG: determination.eventualBG.map(Double.init),
+            minPredBG: d(determination.minPredBG),
+            minGuardBG: d(determination.minGuardBG),
+            insulinReq: d(determination.insulinReq),
+            sensitivityRatio: d(determination.sensitivityRatio),
+            iob: d(determination.iob),
+            cob: d(determination.cob),
+            isf: d(determination.isf),
+            target: d(determination.current_target),
+            forecasts: OrefOutput.Forecasts(
+                iob: determination.predictions?.iob ?? [],
+                cob: determination.predictions?.cob ?? [],
+                uam: determination.predictions?.uam ?? [],
+                zeroTemp: determination.predictions?.zt ?? []
+            ),
+            dynamicISFSkipped: computed.dynamicISFSkipped
+        )
+    }
+
+    static func run(_ input: OrefInput) throws -> Run {
         guard !input.glucose.isEmpty else { throw OrefError.notEnoughData("no glucose") }
         guard !input.basal.isEmpty, !input.sensitivity.isEmpty, !input.carbRatio.isEmpty, !input.targets.isEmpty else {
             throw OrefError.notEnoughData("a therapy schedule is empty")
@@ -413,28 +461,20 @@ public enum Oref {
             currentTime: clock
         ) else { throw OrefError.noDetermination }
 
-        func d(_ value: Decimal?) -> Double? { value.map { NSDecimalNumber(decimal: $0).doubleValue } }
-        return OrefOutput(
-            date: clock,
-            unitsPerHour: d(determination.rate),
-            durationMinutes: d(determination.duration),
-            microBolus: d(determination.units).flatMap { $0 > 0 ? $0 : nil },
-            reason: determination.reason,
-            eventualBG: determination.eventualBG.map(Double.init),
-            minPredBG: d(determination.minPredBG),
-            minGuardBG: d(determination.minGuardBG),
-            insulinReq: d(determination.insulinReq),
-            sensitivityRatio: d(determination.sensitivityRatio),
-            iob: d(determination.iob),
-            cob: d(determination.cob),
-            isf: d(determination.isf),
-            target: d(determination.current_target),
-            forecasts: OrefOutput.Forecasts(
-                iob: determination.predictions?.iob ?? [],
-                cob: determination.predictions?.cob ?? [],
-                uam: determination.predictions?.uam ?? [],
-                zeroTemp: determination.predictions?.zt ?? []
-            ),
+        return Run(
+            profile: profile,
+            preferences: preferences,
+            pumpHistory: pumpHistory,
+            glucose: glucose,
+            carbs: carbs,
+            autosens8h: ratio8h,
+            autosens24h: ratio24h,
+            autosens: autosensResult,
+            meal: meal,
+            iob: iob,
+            currentTemp: currentTemp,
+            customVariables: customVariables,
+            determination: determination,
             dynamicISFSkipped: dynamicISFWanted && !haveDailyInsulin
         )
     }

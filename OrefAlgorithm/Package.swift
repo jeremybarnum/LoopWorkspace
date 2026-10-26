@@ -12,7 +12,9 @@ let package = Package(
     defaultLocalization: "en",
     platforms: [.iOS(.v16), .watchOS(.v8), .macOS(.v13)],
     products: [
-        .library(name: "OrefAlgorithm", targets: ["Trio"])
+        .library(name: "OrefAlgorithm", targets: ["Trio"]),
+        // Command-line runner that prints what each stage computed, for checking a port against Trio's oref.
+        .executable(name: "oref-reference", targets: ["oref-reference"])
     ],
     targets: [
         // Named Trio because the copied files qualify their own types as `Trio.` (they are Trio's module there).
@@ -21,6 +23,11 @@ let package = Package(
             path: "Sources/OrefAlgorithm",
             // Trio's package-only logging shim stands in for the Trio app's logger.
             swiftSettings: [.define("TRIO_ALGORITHM_PACKAGE")]
+        ),
+        .executableTarget(
+            name: "oref-reference",
+            dependencies: ["Trio"],
+            path: "Sources/OrefReference"
         ),
         .testTarget(
             name: "OrefTests",
