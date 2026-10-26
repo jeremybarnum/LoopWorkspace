@@ -12,13 +12,17 @@ public enum DosingAlgorithm: String, Codable, CaseIterable, Sendable {
 
 /// The oref settings Loop stores: the ones Trio's settings screens show, at Trio's defaults.
 /// Settings Loop already has (targets, ISF, carb ratios, basal, max basal, max bolus, suspend threshold,
-/// insulin type) are taken from Loop and are not repeated here.
+/// insulin type) are taken from Loop and are not repeated here. Insulin duration is oref's own: Trio's
+/// 10 hours is not Loop's 6 (oref's curve keeps the peak fixed and only lengthens the tail).
 public struct OrefPreferences: Codable, Equatable, Sendable {
     // Limits
     public var maxIOB: Double = 0
     public var maxCOB: Double = 120
     public var maxDailySafetyMultiplier: Double = 3
     public var currentBasalSafetyMultiplier: Double = 4
+    // Insulin: how long insulin acts. Trio's default and recommendation is 10 hours (range 5–10);
+    // the curve's peak follows the pump's insulin type (rapid-acting or ultra-rapid).
+    public var insulinActionHours: Double = 10
     // Autosens
     public var autosensMax: Double = 1.2
     public var autosensMin: Double = 0.7
@@ -66,6 +70,7 @@ public struct OrefPreferences: Codable, Equatable, Sendable {
         maxCOB = v(.maxCOB, defaults.maxCOB)
         maxDailySafetyMultiplier = v(.maxDailySafetyMultiplier, defaults.maxDailySafetyMultiplier)
         currentBasalSafetyMultiplier = v(.currentBasalSafetyMultiplier, defaults.currentBasalSafetyMultiplier)
+        insulinActionHours = v(.insulinActionHours, defaults.insulinActionHours)
         autosensMax = v(.autosensMax, defaults.autosensMax)
         autosensMin = v(.autosensMin, defaults.autosensMin)
         enableSMBAlways = v(.enableSMBAlways, defaults.enableSMBAlways)
@@ -194,6 +199,7 @@ public struct OrefInput: Sendable {
     public var maxBolus: Double
     public var maxBasalRate: Double
     public var insulinCurve: InsulinCurve
+    /// From `preferences.insulinActionHours` unless set otherwise; at least 5 (oref's minimum).
     public var insulinActionHours: Double
     public var bolusIncrement: Double
     public var supportedBasalRates: [Double]

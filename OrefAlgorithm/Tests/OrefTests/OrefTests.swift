@@ -84,5 +84,14 @@ final class OrefTests: XCTestCase {
         let decoded = try JSONDecoder().decode(OrefPreferences.self, from: Data(#"{"maxIOB": 3}"#.utf8))
         XCTAssertEqual(decoded.maxIOB, 3)
         XCTAssertEqual(decoded.autosensMax, OrefPreferences().autosensMax)
+        XCTAssertEqual(decoded.insulinActionHours, 10, "Trio's default insulin duration")
+    }
+
+    func testLongerInsulinDurationCountsMoreInsulinActive() throws {
+        let dose = OrefInput.Dose.bolus(id: "b1", date: now.addingTimeInterval(-3 * 3600), units: 4, automatic: false)
+        var six = input(glucose: glucose(last: 120, perReading: 0), doses: [dose]); six.insulinActionHours = 6
+        var ten = six; ten.insulinActionHours = 10
+        let iob6 = try XCTUnwrap(Oref.determine(six).iob), iob10 = try XCTUnwrap(Oref.determine(ten).iob)
+        XCTAssertGreaterThan(iob10, iob6, "a 10 h tail leaves more of a 3 h old bolus active")
     }
 }

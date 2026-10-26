@@ -45,6 +45,10 @@ public struct OrefSettingsView: View {
                 stepper("Current basal safety multiplier", p.currentBasalSafetyMultiplier, "×", 0.5, 1...10)
             }
 
+            Section(header: Text("Insulin"), footer: Text("Trio's default is 10 hours and Trio recommends not changing it. oref's curve keeps its peak fixed, so 10 hours here acts much like Loop's 6. The curve follows the pump's insulin type.")) {
+                stepper("Duration of insulin action", p.insulinActionHours, "h", 0.5, 5...10)
+            }
+
             Section(header: Text("Autosens")) {
                 stepper("Autosens max", p.autosensMax, "", 0.05, 1...2)
                 stepper("Autosens min", p.autosensMin, "", 0.05, 0.5...1)
