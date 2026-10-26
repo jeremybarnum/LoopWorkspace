@@ -4,6 +4,9 @@
    <FileRef
       location = "group:TidepoolKit">
    </FileRef>
+   <FileRef
+      location = "group:OrefAlgorithm">
+   </FileRef>
    <Group
       location = "group:Scripts"
       name = "Scripts">
