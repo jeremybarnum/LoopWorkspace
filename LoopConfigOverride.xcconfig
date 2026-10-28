@@ -13,7 +13,15 @@
 //LOOP_LOCAL_CACHE_DURATION_DAYS = 90
 
 // Features
-SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) EXPERIMENTAL_FEATURES_ENABLED SIMULATORS_ENABLED ALLOW_ALGORITHM_EXPERIMENTS DEBUG_FEATURES_ENABLED
+// This branch builds what the Sport Mode PRs contain, so Sport Mode and its Apple push notice are on.
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) SPORT_MODE_ENABLED SPORT_MODE_PUSH_ENABLED EXPERIMENTAL_FEATURES_ENABLED SIMULATORS_ENABLED ALLOW_ALGORITHM_EXPERIMENTS DEBUG_FEATURES_ENABLED
+// Sport Mode signs the watch with HealthKit (workout session) and time-sensitive notifications.
+LOOP_WATCH_ENTITLEMENTS = $(SRCROOT)/WatchApp Extension/SportMode.entitlements
+
+// Debug builds the watch app as one binary: the split debug build crash-loops when opened on the watch.
+ENABLE_DEBUG_DYLIB = NO
+// No eager linking in any project: its stubs can lack the watch's architecture and break the link.
+EAGER_LINKING = NO
 
 // Put your team id here for signing
 //LOOP_DEVELOPMENT_TEAM = UY678SP37Q
