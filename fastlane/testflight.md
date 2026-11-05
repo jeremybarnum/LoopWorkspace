@@ -133,7 +133,7 @@ If you have already built Loop via Xcode using this Apple ID, you can skip ahead
 
 ## Add App Group to Bundle Identifiers
 
-Note 1 - If you previously built with Xcode, the `Names` listed below may be different, but the `Identifiers` will match. A table is provided below the steps to assist. The Add Identifier Action that you completed above generates 6 identifiers, but only 4 need to be modified as indicated in this step.
+Note 1 - If you previously built with Xcode, the `Names` listed below may be different, but the `Identifiers` will match. A table is provided below the steps to assist. The Add Identifier Action that you completed above generates 7 identifiers, but only 5 need to be modified as indicated in this step.
 
 Note 2 - Depending on your build history, you may find some of the Identifiers are already configured - and you are just verifying the status; but in other cases, you will need to configure the Identifiers.
 
@@ -143,6 +143,7 @@ Note 2 - Depending on your build history, you may find some of the Identifiers a
     * Loop Intent Extension
     * Loop Status Extension
     * Loop Widget Extension
+    * Loop Complications
 1. Click on the identifier's name.
 1. On the "App Groups" capabilities, click on the "Configure" button.
 1. Select the "Loop App Group"
@@ -170,6 +171,7 @@ For the Loop Identifier, you must manually add a capability if it is not already
 | Loop Widget Extension | com.TEAMID.loopkit.Loop.LoopWidgetExtension |
 | WatchApp | com.TEAMID.loopkit.Loop.LoopWatch |
 | WatchAppExtension | com.TEAMID.loopkit.Loop.LoopWatch.watchkitextension |
+| Loop Complications | com.TEAMID.loopkit.Loop.LoopWatch.Complications |
 
 
 ## Create Loop App in App Store Connect
